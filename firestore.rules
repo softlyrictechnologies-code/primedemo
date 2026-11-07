@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.admin == true;
+    }
+
+    function hasNonEmptyString(value, minLength, maxLength) {
+      return value is string &&
+        value.trim().size() >= minLength &&
+        value.trim().size() <= maxLength;
+    }
+
+    function isPhoneNumber(value) {
+      return value is string &&
+        value.size() <= 40 &&
+        value.trim().matches('^[+()\\-\\s]*([0-9][+()\\-\\s]*){8,20}$');
+    }
+
+    function isValidEmail(value) {
+      return value == null || value == '' || (
+        value is string &&
+        value.size() <= 254 &&
+        value.matches('^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$')
+      );
+    }
+
+    match /properties/{propertyId} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow create: if isAdmin() &&
+        request.resource.data.title is string &&
+        request.resource.data.title.trim().size() > 0 &&
+        request.resource.data.title.size() <= 200 &&
+        request.resource.data.location is string &&
+        request.resource.data.location.size() > 0 &&
+        request.resource.data.area is string &&
+        request.resource.data.area.size() > 0 &&
+        request.resource.data.areaSqFt is number &&
+        request.resource.data.areaSqFt > 0 &&
+        request.resource.data.price is number &&
+        request.resource.data.price >= 0 &&
+        request.resource.data.published is bool &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() <= 100 &&
+        request.resource.data.email is string &&
+        request.resource.data.email.size() <= 254 &&
+        (!('role' in request.resource.data) || request.resource.data.role in ['buyer', 'seller']) &&
+        (!('role' in request.resource.data) || request.resource.data.role != 'admin');
+      allow update: if (isOwner(userId) && request.resource.data.uid == userId &&
+        (!('role' in request.resource.data) || request.resource.data.role != 'admin')) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /inquiries/{inquiryId} {
+      allow create: if request.resource.data.keys().hasAll(['propertyId', 'customerName', 'customerPhone']) &&
+        request.resource.data.propertyId is string &&
+        request.resource.data.propertyId.trim().size() > 0 &&
+        request.resource.data.customerName is string &&
+        request.resource.data.customerName.trim().size() >= 1 &&
+        request.resource.data.customerName.size() <= 100 &&
+        request.resource.data.customerPhone is string &&
+        isPhoneNumber(request.resource.data.customerPhone) &&
+        (!('customerEmail' in request.resource.data) || isValidEmail(request.resource.data.customerEmail)) &&
+        (!('message' in request.resource.data) || (request.resource.data.message is string && request.resource.data.message.size() <= 2000)) &&
+        (!('status' in request.resource.data) || request.resource.data.status == 'new') &&
+        (!('preferredDate' in request.resource.data) || request.resource.data.preferredDate is string) &&
+        (!('preferredTime' in request.resource.data) || request.resource.data.preferredTime is string) &&
+        (!('transport' in request.resource.data) || request.resource.data.transport in ['self', 'shuttle']);
+      allow read: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /favorites/{favoriteId} {
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.propertyId is string &&
+        request.resource.data.propertyId.size() > 0;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+
+    match /sellerSubmissions/{submissionId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.sellerId == request.auth.uid);
+      allow create: if isSignedIn() &&
+        request.resource.data.sellerId == request.auth.uid &&
+        request.resource.data.title is string &&
+        request.resource.data.title.trim().size() > 0 &&
+        request.resource.data.title.size() <= 200 &&
+        request.resource.data.location is string &&
+        request.resource.data.location.size() > 0 &&
+        request.resource.data.areaSqFt is number &&
+        request.resource.data.areaSqFt > 0 &&
+        (!('status' in request.resource.data) || request.resource.data.status == 'pending') &&
+        (!('sellerPhone' in request.resource.data) || isPhoneNumber(request.resource.data.sellerPhone));
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.sellerId == request.auth.uid &&
+        request.resource.data.sellerId == request.auth.uid &&
+        request.resource.data.status in ['pending', 'needs_revision', 'rejected']
+      );
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.sellerId == request.auth.uid);
+    }
+
+    match /contactMessages/{messageId} {
+      allow create: if request.resource.data.keys().hasAll(['name', 'message']) &&
+        request.resource.data.name is string &&
+        request.resource.data.name.trim().size() > 0 &&
+        request.resource.data.name.size() <= 100 &&
+        request.resource.data.message is string &&
+        request.resource.data.message.trim().size() > 0 &&
+        request.resource.data.message.size() <= 3000 &&
+        (!('email' in request.resource.data) || isValidEmail(request.resource.data.email)) &&
+        (!('status' in request.resource.data) || request.resource.data.status == 'new');
+      allow read: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /locations/{locationId} {
+      allow read: if true || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /insights/{insightId} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /adminLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
