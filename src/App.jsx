@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { APP_MODE } from './config/appMode';
+import { APP_MODE, isPublicOnly } from './config/appMode';
 import HomePage from './pages/HomePage';
 import PropertiesPage from './pages/PropertiesPage';
 import PropertyDetailsPage from './pages/PropertyDetailsPage';
@@ -10,7 +10,7 @@ import ContactPage from './pages/ContactPage';
 import DevUiKitPage from './pages/DevUiKitPage';
 import NotFoundPage from './pages/NotFoundPage';
 
-const AdminRoutes = import.meta.env.VITE_APP_MODE !== 'public'
+const AdminRoutes = !isPublicOnly
   ? lazy(() => import('./admin/routes'))
   : null;
 
@@ -66,12 +66,15 @@ function AllRoutes() {
 }
 
 export default function App() {
+  const showPublicRoutes = APP_MODE !== 'admin';
+  const showAdminRoutes = APP_MODE !== 'public';
+
   return (
     <BrowserRouter>
       <AppMeta />
       <Suspense fallback={null}>
-        {APP_MODE === 'public' && <PublicRoutes />}
-        {APP_MODE === 'admin' && AdminRoutes && <AdminRoutes redirectRoot={true} />}
+        {showPublicRoutes && APP_MODE === 'public' && <PublicRoutes />}
+        {showAdminRoutes && APP_MODE === 'admin' && AdminRoutes && <AdminRoutes redirectRoot={true} />}
         {APP_MODE === 'all' && <AllRoutes />}
       </Suspense>
     </BrowserRouter>

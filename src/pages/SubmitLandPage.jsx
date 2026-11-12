@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, ArrowRight, UploadCloud, Loader2, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ArrowRight, UploadCloud, Loader2, X, Copy } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Toast from '../components/Toast';
@@ -10,6 +10,7 @@ import { validateImageFile, uploadSellerSubmissionImage, ALLOWED_MIME_TYPES, MAX
 import { validatePropertyTitle } from '../utils/propertyValidation.js';
 
 const MAX_SELLER_IMAGES = 6;
+const SUBMISSION_REFERENCE_KEY = 'primeHousingSubmissionReference';
 
 export default function SubmitLandPage() {
   const siteContent = usePublicSiteContent();
@@ -36,6 +37,14 @@ export default function SubmitLandPage() {
     description: '',
   });
   const [submissionReference, setSubmissionReference] = useState('');
+
+  useEffect(() => {
+    const savedReference = window.localStorage.getItem(SUBMISSION_REFERENCE_KEY);
+    if (savedReference) {
+      setSubmissionReference(savedReference);
+      setSubmitted(true);
+    }
+  }, []);
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -79,6 +88,26 @@ export default function SubmitLandPage() {
       }
       return prev.filter((image) => image.id !== imageId);
     });
+  };
+
+  const handleCopyReference = async () => {
+    if (!submissionReference) return;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(submissionReference);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = submissionReference;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setToastMessage('Submission reference copied to clipboard.');
+    } catch (error) {
+      setToastMessage('Unable to copy the submission reference.');
+    }
   };
 
   const uploadImagesForSubmission = async (submissionId) => {
@@ -141,7 +170,9 @@ export default function SubmitLandPage() {
       }, submissionId);
 
       setSubmitted(true);
-      setSubmissionReference(createdSubmission.id);
+      const nextReference = createdSubmission.id;
+      setSubmissionReference(nextReference);
+      window.localStorage.setItem(SUBMISSION_REFERENCE_KEY, nextReference);
       setToastMessage('Your property submission has been received and is pending admin review.');
       setForm({
         title: '',
@@ -334,6 +365,9 @@ export default function SubmitLandPage() {
               <p className="mt-2 text-sm text-slate-600">Your land listing has been stored privately and is awaiting admin review before it can be published.</p>
               <p className="mt-3 text-sm font-bold text-emerald-800">Submission reference: <span className="font-mono">{submissionReference}</span></p>
               <div className="mt-6 flex justify-center gap-3">
+                <button type="button" onClick={handleCopyReference} className="inline-flex items-center gap-2 rounded-full border border-emerald-600 bg-white px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50">
+                  <Copy className="h-4 w-4" /> Copy reference
+                </button>
                 <Link to="/" className="rounded-full bg-slate-900 px-4 py-2.5 text-sm font-bold text-white">Return home</Link>
                 <Link to="/properties" className="rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-800">Browse listings</Link>
               </div>
