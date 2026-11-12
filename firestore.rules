@@ -148,7 +148,7 @@ service cloud.firestore {
     }
     match /inquiries/{id} {
       allow create: if hasValidBuyerEnquiry(request.resource.data);
-      allow read: if false;
+      allow read: if canManageLeads() || isAdmin();
       allow delete: if canManageLeads();
       allow update: if canManageLeads()
         && request.resource.data.status in ['new', 'contacted', 'closed']
@@ -156,7 +156,7 @@ service cloud.firestore {
     }
     match /contactMessages/{id} {
       allow create: if hasValidContactMessage(request.resource.data);
-      allow read: if false;
+      allow read: if canManageLeads() || isAdmin();
       allow update, delete: if isAdmin();
     }
 
