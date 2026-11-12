@@ -37,7 +37,7 @@ async function run() {
 
   // 2. Test create user / get user
   try {
-    const user = await adminAuth.getUserByEmail('admin@gamil.com');
+    const user = await adminAuth.getUserByEmail(process.argv[2]);
     console.log('User found in Firebase Auth:', user.uid, user.customClaims);
   } catch (err) {
     console.log('adminAuth.getUserByEmail:', err.message, err.code);

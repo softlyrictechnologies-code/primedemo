@@ -4,6 +4,7 @@ import { db } from '../../firebase.js';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
+import AdminNotice, { useAdminNotice } from '../components/AdminNotice';
 import { BookOpen, Plus, Edit3, Trash2, Eye, EyeOff, X } from 'lucide-react';
 import { logAdminAction } from '../services/adminLogService';
 
@@ -19,6 +20,7 @@ const EMPTY_INSIGHT = {
 };
 
 export default function Insights() {
+  const { notice, showNotice, clearNotice } = useAdminNotice();
   const [insights, setInsights] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,6 +39,7 @@ export default function Insights() {
       setInsights(list);
     } catch (err) {
       console.error('Error fetching insights:', err);
+      showNotice('error', err.message || 'Could not load insights.');
     } finally {
       setIsLoading(false);
     }
@@ -96,7 +99,7 @@ export default function Insights() {
       await fetchInsights();
       setIsModalOpen(false);
     } catch (err) {
-      alert(`Save error: ${err.message}`);
+      showNotice('error', `Could not save insight: ${err.message}`);
     }
   };
 
@@ -104,11 +107,12 @@ export default function Insights() {
     try {
       const docRef = doc(db, INSIGHTS_COLLECTION, ins.id);
       await updateDoc(docRef, { published: !ins.published });
+      await logAdminAction({ action: ins.published ? 'INSIGHT_UNPUBLISHED' : 'INSIGHT_PUBLISHED', target: INSIGHTS_COLLECTION, targetId: ins.id });
       setInsights((prev) =>
         prev.map((i) => (i.id === ins.id ? { ...i, published: !i.published } : i))
       );
     } catch (err) {
-      alert(`Toggle error: ${err.message}`);
+      showNotice('error', `Could not update insight status: ${err.message}`);
     }
   };
 
@@ -116,10 +120,11 @@ export default function Insights() {
     if (!deletingId) return;
     try {
       await deleteDoc(doc(db, INSIGHTS_COLLECTION, deletingId));
+      await logAdminAction({ action: 'INSIGHT_DELETED', target: INSIGHTS_COLLECTION, targetId: deletingId });
       setInsights((prev) => prev.filter((i) => i.id !== deletingId));
       setDeletingId(null);
     } catch (err) {
-      alert(`Delete error: ${err.message}`);
+      showNotice('error', `Could not delete insight: ${err.message}`);
     }
   };
 
@@ -194,6 +199,7 @@ export default function Insights() {
 
   return (
     <div className="space-y-6">
+      <AdminNotice notice={notice} onClose={clearNotice} />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-900 tracking-tight">

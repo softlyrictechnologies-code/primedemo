@@ -1,6 +1,7 @@
-import React from 'react';
-import { Filter, ArrowUpDown, ShieldCheck, Grid, Map, List, Sparkles } from 'lucide-react';
-import { CHENNAI_AREAS } from '../data/plotsData';
+import React, { useEffect, useState } from 'react';
+import { Filter, ArrowUpDown, ShieldCheck, Grid, Map } from 'lucide-react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../firebase.js';
 
 export default function QuickFiltersBar({
   selectedArea,
@@ -13,6 +14,35 @@ export default function QuickFiltersBar({
   viewMode,
   setViewMode
 }) {
+  const [areaOptions, setAreaOptions] = useState([{ id: 'all', name: 'All Locations' }]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAreas() {
+      try {
+        const snap = await getDocs(query(collection(db, 'locations'), where('active', '==', true)));
+        const items = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+        const entries = items
+          .filter((item) => !item.type || item.type === 'location')
+          .map((item) => ({ id: String(item.name || item.id), name: item.name || item.id }))
+          .filter((item) => item.name)
+          .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
+
+        if (isMounted) {
+          setAreaOptions([{ id: 'all', name: 'All Locations' }, ...entries]);
+        }
+      } catch (error) {
+        console.error('Failed to load location chips from Firestore:', error);
+      }
+    }
+
+    loadAreas();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <div className="bg-white/80 backdrop-blur-xl p-4 sm:p-5 rounded-[2rem] border border-white/80 shadow-lg shadow-slate-200/50 mb-8 space-y-4">
       
@@ -24,7 +54,7 @@ export default function QuickFiltersBar({
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
             <Filter className="w-3.5 h-3.5 text-[#1B4D3E]" /> Area:
           </span>
-          {CHENNAI_AREAS.map((area) => (
+          {areaOptions.map((area) => (
             <button
               key={area.id}
               onClick={() => setSelectedArea(area.id)}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, ShieldCheck, MapPin, Calendar, CheckCircle2, ChevronRight, IndianRupee, Calculator, Download, Compass, PhoneCall, Share2, Layers } from 'lucide-react';
+import { X, ShieldCheck, MapPin, CheckCircle2, Calculator, Download, Compass, Share2, Layers } from 'lucide-react';
 
-export default function PropertyDetailModal({ plot, onClose, onScheduleVisit, onTriggerToast }) {
+export default function PropertyDetailModal({ plot, onClose, onTriggerToast }) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [downPaymentPercent, setDownPaymentPercent] = useState(20);
   const [interestRate, setInterestRate] = useState(8.5);
@@ -30,7 +30,7 @@ export default function PropertyDetailModal({ plot, onClose, onScheduleVisit, on
     if (navigator.share) {
       navigator.share({
         title: plot.title,
-        text: `Check out this verified plot in ${plot.location} on Prime Housing Chennai!`,
+        text: `Check out this verified plot in ${plot.location} on Prime Housing!`,
         url: window.location.href,
       }).catch(() => {});
     } else {
@@ -402,18 +402,13 @@ export default function PropertyDetailModal({ plot, onClose, onScheduleVisit, on
             <p className="text-xl font-black text-[#1B4D3E]">{plot.formattedPrice}</p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                onClose();
-                onScheduleVisit(plot);
-              }}
-              className="px-6 py-3 rounded-2xl bg-[#1B4D3E] hover:bg-[#143B30] text-white text-xs font-bold shadow-lg shadow-[#1B4D3E]/30 flex items-center gap-2 transition-all"
-            >
-              <Calendar className="w-4 h-4 text-emerald-300" />
-              <span>Schedule Free Site Visit</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-6 py-3 rounded-2xl bg-brand-700 text-white text-xs font-bold shadow-lg shadow-brand-700/30 transition-all hover:bg-brand-800"
+          >
+            Close
+          </button>
         </div>
 
       </div>

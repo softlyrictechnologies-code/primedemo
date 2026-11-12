@@ -1,0 +1,10 @@
+<svg width="980" height="220" viewBox="0 0 980 220" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Prime Housing</title>
+  <desc id="desc">Prime Housing property and land listings</desc>
+  <path d="M30 104L102 42L174 104V181H30V104Z" stroke="#D5A45D" stroke-width="13" stroke-linejoin="round"/>
+  <path d="M75 181V124H129V181" stroke="#D5A45D" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M20 105L102 34L184 105" stroke="#1C3529" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="222" y="112" fill="#1C3529" font-family="Arial, Helvetica, sans-serif" font-size="80" font-weight="800" letter-spacing="-3">PRIME</text>
+  <text x="510" y="112" fill="#D5A45D" font-family="Arial, Helvetica, sans-serif" font-size="80" font-weight="700" letter-spacing="-3">HOUSING</text>
+  <text x="229" y="158" fill="#536273" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="600" letter-spacing="5">PROPERTY · LAND · PLOTS</text>
+</svg>

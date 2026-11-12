@@ -6,28 +6,31 @@ import { useAdminAuth } from '../context/AdminAuthContext';
 const ROUTE_TITLES = {
   '/admin/dashboard': 'Executive Overview',
   '/admin/properties': 'Property Management',
-  '/admin/inquiries': 'Buyer Enquiries',
+  '/admin/inquiries': 'Buyer Inquiries',
   '/admin/sellers': 'Landowner Submissions',
-  '/admin/locations': 'Locations and Categories',
+  '/admin/users': 'Registered Users',
+  '/admin/messages': 'Contact Messages',
+  '/admin/locations': 'Locations & Area Guides',
+  '/admin/insights': 'Legal Guides & Insights',
+  '/admin/logs': 'Audit Trail & Activity Logs',
   '/admin/content': 'Website Content',
   '/admin/website-content': 'Website Content',
-  '/admin/settings': 'User and Settings Management',
-  '/admin/messages': 'Website Content',
-  '/admin/insights': 'Website Content',
 };
 
-export default function AdminHeader({ onToggleSidebar }) {
+export default function AdminHeader({ onToggleSidebar, sidebarOpen = false }) {
   const location = useLocation();
-  const { currentUser } = useAdminAuth();
+  const { currentUser, isSuperAdmin } = useAdminAuth();
 
   const currentTitle = ROUTE_TITLES[location.pathname] || 'Admin Portal';
 
   return (
-    <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-8 flex items-center justify-between">
+    <header className="admin-header sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-8 flex items-center justify-between">
       {/* Left side: Hamburger on mobile + Title */}
       <div className="flex items-center gap-3">
         <button
           onClick={onToggleSidebar}
+          aria-label={sidebarOpen ? 'Close admin navigation' : 'Open admin navigation'}
+          aria-expanded={sidebarOpen}
           className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 lg:hidden cursor-pointer"
           title="Open Navigation"
         >
@@ -39,7 +42,7 @@ export default function AdminHeader({ onToggleSidebar }) {
             {currentTitle}
           </h1>
           <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-            Prime Housing Control Center • <span className="font-semibold text-slate-600">prime-housing</span>
+            Prime Housing Control Center • <span className="font-semibold text-slate-600">prime housing</span>
           </p>
         </div>
       </div>
@@ -49,7 +52,7 @@ export default function AdminHeader({ onToggleSidebar }) {
         {/* Firebase Live Badge */}
         <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/60 text-[11px] font-bold text-emerald-800">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Firestore Live</span>
+          <span>Firebase workspace</span>
         </div>
 
         {/* Live Site Shortcut */}
@@ -72,7 +75,7 @@ export default function AdminHeader({ onToggleSidebar }) {
               {currentUser?.email}
             </p>
             <p className="text-[10px] text-indigo-600 font-extrabold uppercase tracking-wider">
-              Super Admin
+              {isSuperAdmin ? 'Super Admin' : 'Admin'}
             </p>
           </div>
         </div>

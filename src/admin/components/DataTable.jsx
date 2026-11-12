@@ -89,7 +89,7 @@ export default function DataTable({
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
+    <div className="admin-data-table bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
       {/* Top Controls Bar */}
       <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white">
         {/* Search Input */}
@@ -157,8 +157,8 @@ export default function DataTable({
               <tr className="border-b border-slate-100 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 {columns.map((col, idx) => (
                   <th
-                    key={col.key || idx}
-                    onClick={() => col.sortable !== false && handleSort(col.key, col.sortable !== false)}
+                    key={col.key || col.accessor || idx}
+                    onClick={() => col.sortable !== false && handleSort(col.key || col.accessor, col.sortable !== false)}
                     className={`px-4 sm:px-6 py-3.5 select-none ${
                       col.sortable !== false ? 'cursor-pointer hover:text-slate-900 transition-colors' : ''
                     } ${col.headerClassName || ''}`}
@@ -167,7 +167,7 @@ export default function DataTable({
                       <span>{col.header}</span>
                       {col.sortable !== false && (
                         <span className="text-slate-400">
-                          {sortKey === col.key ? (
+                          {sortKey === (col.key || col.accessor) ? (
                             sortDirection === 'asc' ? (
                               <ChevronUp className="w-3.5 h-3.5 text-indigo-600" />
                             ) : (
@@ -193,10 +193,18 @@ export default function DataTable({
                   >
                     {columns.map((col, colIdx) => (
                       <td
-                        key={col.key || colIdx}
+                        key={col.key || col.accessor || colIdx}
                         className={`px-4 sm:px-6 py-4 align-middle ${col.cellClassName || ''}`}
                       >
-                        {col.render ? col.render(row, rowIdx) : row[col.key]}
+                        {col.render
+                          ? col.accessor
+                            ? col.render(row[col.accessor], row, rowIdx)
+                            : col.render(row, rowIdx)
+                          : (() => {
+                              const value = row[col.key || col.accessor];
+                              if (value === null || value === undefined || value === '') return '—';
+                              return typeof value === 'object' ? JSON.stringify(value) : String(value);
+                            })()}
                       </td>
                     ))}
                   </tr>

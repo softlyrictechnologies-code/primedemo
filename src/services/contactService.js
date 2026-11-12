@@ -10,6 +10,10 @@ import { db, auth } from '../firebase.js';
 
 export const CONTACT_MESSAGES_COLLECTION = 'contactMessages';
 
+function normalizePhone(value) {
+  return String(value || '').replace(/[^\d+]/g, '').replace(/^\+91/, '91');
+}
+
 /**
  * Validates and submits general contact messages from visitors.
  * Enforces default status: 'new'.
@@ -21,6 +25,11 @@ export async function submitContactMessage(contactData) {
 
   const name = (contactData.name || '').trim();
   const message = (contactData.message || '').trim();
+  const honeypot = (contactData.website || '').trim();
+
+  if (honeypot) {
+    throw new Error('Invalid submission.');
+  }
 
   if (!name) {
     throw new Error('Name is required.');
@@ -32,14 +41,18 @@ export async function submitContactMessage(contactData) {
   if (!message) {
     throw new Error('Message is required.');
   }
-  if (message.length > 3000) {
-    throw new Error('Message must not exceed 3000 characters.');
+  if (message.length > 1000) {
+    throw new Error('Message must not exceed 1000 characters.');
   }
 
   const email = (contactData.email || '').trim().toLowerCase();
-  const phone = (contactData.phone || '').trim();
+  const phone = normalizePhone(contactData.phone || '');
 
-  if (email && !email.includes('@')) {
+  if (!phone || !/^(?:\+91|91)?[6-9]\d{9}$/.test(phone.replace(/\D/g, ''))) {
+    throw new Error('Please enter a valid Indian mobile number.');
+  }
+
+  if (email && !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email)) {
     throw new Error('Please provide a valid email address.');
   }
 
@@ -48,10 +61,11 @@ export async function submitContactMessage(contactData) {
     const payload = {
       name,
       email,
-      phone,
+      phone: phone.replace(/\D/g, ''),
       subject: (contactData.subject || 'General Inquiry').trim().slice(0, 150),
       message,
       status: 'new',
+      source: 'website',
       createdAt: serverTimestamp(),
     };
 

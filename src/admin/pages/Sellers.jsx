@@ -16,15 +16,17 @@ import {
 } from 'lucide-react';
 import { 
   getAllSubmissions, 
-  approveAndPublishSubmission, 
+  approveAndCreateDraft, 
   rejectSubmission, 
   requestRevision 
 } from '../services/adminSellerService';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
+import AdminNotice, { useAdminNotice } from '../components/AdminNotice';
 
 export default function Sellers() {
+  const { notice, showNotice, clearNotice } = useAdminNotice();
   const [submissions, setSubmissions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -48,6 +50,7 @@ export default function Sellers() {
       setSubmissions(data);
     } catch (err) {
       console.error('Error fetching seller submissions:', err);
+      showNotice('error', err.message || 'Could not load landowner submissions.');
     } finally {
       setIsLoading(false);
     }
@@ -60,12 +63,12 @@ export default function Sellers() {
   const handleApproveAndPublish = async (sub) => {
     setIsProcessing(true);
     try {
-      await approveAndPublishSubmission(sub);
+      await approveAndCreateDraft(sub);
       await fetchSubmissions();
       setReviewingSubmission(null);
-      alert(`Success! "${sub.title}" is now verified and published to the live public listings.`);
+      showNotice('success', `“${sub.title}” has been approved and saved as a draft. Review and publish it from Properties.`);
     } catch (err) {
-      alert(`Approval error: ${err.message}`);
+      showNotice('error', `Approval failed: ${err.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -75,12 +78,13 @@ export default function Sellers() {
     if (!rejectingId) return;
     setIsProcessing(true);
     try {
-      await rejectSubmission(rejectingId, rejectReason);
+      const target = submissions.find((submission) => submission.id === rejectingId);
+      await rejectSubmission(rejectingId, rejectReason, target?._collection);
       await fetchSubmissions();
       setRejectingId(null);
       if (reviewingSubmission?.id === rejectingId) setReviewingSubmission(null);
     } catch (err) {
-      alert(`Reject error: ${err.message}`);
+      showNotice('error', `Rejection failed: ${err.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -90,12 +94,13 @@ export default function Sellers() {
     if (!revisingId) return;
     setIsProcessing(true);
     try {
-      await requestRevision(revisingId, revisionNotes);
+      const target = submissions.find((submission) => submission.id === revisingId);
+      await requestRevision(revisingId, revisionNotes, target?._collection);
       await fetchSubmissions();
       setRevisingId(null);
       if (reviewingSubmission?.id === revisingId) setReviewingSubmission(null);
     } catch (err) {
-      alert(`Revision request error: ${err.message}`);
+      showNotice('error', `Could not request revisions: ${err.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -186,6 +191,7 @@ export default function Sellers() {
 
   return (
     <div className="space-y-6">
+      <AdminNotice notice={notice} onClose={clearNotice} />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-900 tracking-tight">
@@ -271,12 +277,18 @@ export default function Sellers() {
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">Facing</span>
-                    <span className="font-bold text-slate-800">{reviewingSubmission.facing || 'East'}</span>
+                    <span className="font-bold text-slate-800">{reviewingSubmission.facing || 'Not provided'}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">Dimensions</span>
-                    <span className="font-bold text-slate-800">{reviewingSubmission.dimensions || '30x40'}</span>
+                    <span className="font-bold text-slate-800">{reviewingSubmission.dimensions || 'Not provided'}</span>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 border-t border-slate-200/80 pt-2 text-slate-600">
+                  <div><span className="block text-[10px] text-slate-400">District / town</span><span className="font-semibold">{[reviewingSubmission.district, reviewingSubmission.town].filter(Boolean).join(' · ') || 'Not provided'}</span></div>
+                  <div><span className="block text-[10px] text-slate-400">Road access</span><span className="font-semibold">{reviewingSubmission.roadAccess || 'Not provided'}</span></div>
+                  <div className="col-span-2"><span className="block text-[10px] text-slate-400">Approval / documents</span><span className="font-semibold">{reviewingSubmission.approvalDetails || reviewingSubmission.approval || 'Not provided'}</span></div>
                 </div>
 
                 <div className="pt-2 border-t border-slate-200/80 grid grid-cols-2 gap-2 text-slate-600">
@@ -286,8 +298,9 @@ export default function Sellers() {
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">Contact</span>
-                    <span className="font-bold text-indigo-600">{reviewingSubmission.sellerPhone || 'N/A'}</span>
+                    {reviewingSubmission.sellerPhone ? <a href={`tel:${String(reviewingSubmission.sellerPhone).replace(/[^+\d]/g, '')}`} className="font-bold text-indigo-600 hover:underline">{reviewingSubmission.sellerPhone}</a> : <span className="font-bold text-slate-500">N/A</span>}
                   </div>
+                  {reviewingSubmission.sellerEmail && <div className="col-span-2"><span className="text-slate-400 block text-[10px]">Email</span><a href={`mailto:${reviewingSubmission.sellerEmail}`} className="font-bold text-indigo-600 hover:underline">{reviewingSubmission.sellerEmail}</a></div>}
                 </div>
 
                 {reviewingSubmission.description && (
@@ -296,6 +309,7 @@ export default function Sellers() {
                     <p className="text-slate-700 mt-0.5 leading-relaxed">{reviewingSubmission.description}</p>
                   </div>
                 )}
+                {reviewingSubmission.additionalNotes && <div className="pt-2 border-t border-slate-200/80"><span className="text-slate-400 block text-[10px]">Additional notes</span><p className="mt-0.5 leading-relaxed text-slate-700">{reviewingSubmission.additionalNotes}</p></div>}
               </div>
 
               {/* Photos Gallery */}
@@ -327,7 +341,7 @@ export default function Sellers() {
                 <div className="leading-relaxed">
                   <p className="font-bold">Legal Approval & Publishing Process:</p>
                   <p className="text-[11px] text-indigo-700 mt-0.5">
-                    Clicking "Approve & Publish" creates an authentic listing in the public <code className="font-bold">properties</code> collection, marks the submission as approved, and logs the action in the audit trail.
+                    Approving creates a private draft in <code className="font-bold">properties</code> and marks this submission as approved. Review the draft in Properties, complete verification, then publish it when ready.
                   </p>
                 </div>
               </div>
@@ -345,7 +359,7 @@ export default function Sellers() {
                 <button
                   type="button"
                   onClick={() => setRevisingId(reviewingSubmission.id)}
-                  className="px-4 py-2 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 font-bold transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold transition-colors cursor-pointer"
                 >
                   Request Revisions
                 </button>
@@ -365,7 +379,7 @@ export default function Sellers() {
                   className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md shadow-emerald-600/30 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  <span>Approve & Publish</span>
+                  <span>Approve & Create Draft</span>
                 </button>
               </div>
             </div>
@@ -430,7 +444,7 @@ export default function Sellers() {
               <button
                 disabled={isProcessing}
                 onClick={handleConfirmRevision}
-                className="px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-bold hover:bg-orange-700"
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700"
               >
                 Send Revision Notice
               </button>

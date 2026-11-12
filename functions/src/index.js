@@ -10,6 +10,18 @@ if (getApps().length === 0) {
 const db = getFirestore();
 const auth = getAuth();
 
+function hasAdminClaim(token = {}) {
+  return Boolean(
+    token.admin === true ||
+      token.superAdmin === true ||
+      ['admin', 'super_admin', 'super-admin'].includes(token.role)
+  );
+}
+
+function hasSuperAdminClaim(token = {}) {
+  return Boolean(token.superAdmin === true || ['super_admin', 'super-admin'].includes(token.role));
+}
+
 /**
  * Helper to ensure caller has verified admin claims
  */
@@ -18,9 +30,18 @@ function assertAdmin(request) {
     throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
   }
   const token = request.auth.token || {};
-  const isAdmin = token.admin === true || token.role === 'admin';
-  if (!isAdmin) {
+  if (!hasAdminClaim(token)) {
     throw new HttpsError('permission-denied', 'Only verified administrators can execute this privileged function.');
+  }
+}
+
+function assertSuperAdmin(request) {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+  }
+  const token = request.auth.token || {};
+  if (!hasSuperAdminClaim(token)) {
+    throw new HttpsError('permission-denied', 'Only super administrators can perform this action.');
   }
 }
 
@@ -28,39 +49,64 @@ function assertAdmin(request) {
  * Callable: Set admin custom claims on a user
  */
 export const setAdminCustomClaim = onCall(async (request) => {
-  assertAdmin(request);
+  assertSuperAdmin(request);
 
-  const { targetUid, admin = true, role = 'admin' } = request.data || {};
+  const { targetUid, role = 'admin' } = request.data || {};
   if (!targetUid || typeof targetUid !== 'string') {
     throw new HttpsError('invalid-argument', 'Target UID is required.');
   }
+  if (!['buyer', 'seller', 'editor', 'support', 'admin'].includes(role)) {
+    throw new HttpsError('invalid-argument', 'Unsupported user role.');
+  }
 
   try {
-    await auth.setCustomUserClaims(targetUid, { admin, role });
+    const admin = role === 'admin';
+    const target = await auth.getUser(targetUid);
+    if (!admin && targetUid === request.auth.uid) {
+      throw new HttpsError('failed-precondition', 'You cannot demote your own account.');
+    }
+    if (!admin) {
+      let pageToken;
+      let adminCount = 0;
+      do {
+        const page = await auth.listUsers(1000, pageToken);
+        adminCount += page.users.filter((user) => user.customClaims?.admin === true || user.customClaims?.superAdmin === true || ['admin', 'super_admin', 'super-admin'].includes(user.customClaims?.role)).length;
+        pageToken = page.pageToken;
+      } while (pageToken);
+      if (adminCount <= 1 && (target.customClaims?.admin === true || target.customClaims?.superAdmin === true || ['admin', 'super_admin', 'super-admin'].includes(target.customClaims?.role))) {
+        throw new HttpsError('failed-precondition', 'The last administrator cannot be demoted.');
+      }
+    }
 
-    // Also update users/{uid} document if exists
+    const { admin: _oldAdmin, superAdmin: _oldSuperAdmin, role: _oldRole, ...otherClaims } = target.customClaims || {};
+    await auth.setCustomUserClaims(targetUid, { ...otherClaims, ...(admin ? { admin: true } : {}), role });
+
     const userRef = db.collection('users').doc(targetUid);
     const userDoc = await userRef.get();
     if (userDoc.exists) {
       await userRef.update({
-        role: admin ? 'admin' : 'buyer',
+        role,
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
+    const adminRef = db.collection('admins').doc(targetUid);
+    if (admin) await adminRef.set({ uid: targetUid, email: target.email, role, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    else await adminRef.delete();
 
     // Log to adminLogs
     await db.collection('adminLogs').add({
       action: 'ADMIN_CLAIM_PROVISIONED',
       target: 'auth',
       targetId: targetUid,
-      details: { admin, role },
+      details: { role },
       adminEmail: request.auth.token.email || 'system',
       adminUid: request.auth.uid,
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    return { success: true, targetUid, claims: { admin, role } };
+    return { success: true, targetUid, claims: { ...(admin ? { admin: true } : {}), role } };
   } catch (error) {
+    if (error instanceof HttpsError) throw error;
     console.error('Error setting custom user claims:', error);
     throw new HttpsError('internal', error.message);
   }
@@ -123,7 +169,10 @@ export const approveSellerSubmission = onCall(async (request) => {
         appreciationRate: '+12.0% YoY',
         images: subData.images || [],
         imageUrls: subData.images || [],
-        published: true,
+        published: false,
+        status: 'draft',
+        isSoldOut: false,
+        soldOutAt: null,
         featured: false,
         verified: true,
         createdBy: request.auth.uid,
@@ -144,7 +193,7 @@ export const approveSellerSubmission = onCall(async (request) => {
 
     // Record audit
     await db.collection('adminLogs').add({
-      action: 'SELLER_SUBMISSION_APPROVED_AND_PUBLISHED',
+      action: 'SELLER_SUBMISSION_APPROVED_DRAFT_CREATED',
       target: 'sellerSubmissions',
       targetId: submissionId,
       details: { newPropertyId },

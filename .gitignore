@@ -17,11 +17,14 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+!cors.json
 *.log
 .firebase/
 serviceAccountKey.json
 serviceAccountKey*.json
-*-firebase-adminsdk-*.json
+scripts/serviceAccountKey*.json
+*.serviceaccount.json
+*adminsdk*.json
 imgcheck/
 service-account*.json
 
@@ -35,3 +38,5 @@ service-account*.json
 *.njsproj
 *.sln
 *.sw?
+
+serviceAccountKey*.json

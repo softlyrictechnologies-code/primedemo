@@ -3,6 +3,7 @@ import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, serverTimestamp
 import { db } from '../../firebase.js';
 import DataTable from '../components/DataTable';
 import ConfirmDialog from '../components/ConfirmDialog';
+import AdminNotice, { useAdminNotice } from '../components/AdminNotice';
 import { MapPin, Plus, Edit3, Trash2, X, TrendingUp, CheckCircle } from 'lucide-react';
 import { logAdminAction } from '../services/adminLogService';
 
@@ -15,9 +16,11 @@ const EMPTY_LOCATION = {
   appreciationRate: '+14% YoY',
   description: '',
   highlights: '',
+  active: true,
 };
 
 export default function Locations() {
+  const { notice, showNotice, clearNotice } = useAdminNotice();
   const [locations, setLocations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -36,6 +39,7 @@ export default function Locations() {
       setLocations(list);
     } catch (err) {
       console.error('Error fetching locations:', err);
+      showNotice('error', err.message || 'Could not load location data.');
     } finally {
       setIsLoading(false);
     }
@@ -60,6 +64,7 @@ export default function Locations() {
       appreciationRate: loc.appreciationRate || '+12% YoY',
       description: loc.description || '',
       highlights: Array.isArray(loc.highlights) ? loc.highlights.join(', ') : (loc.highlights || ''),
+      active: loc.active !== false,
     });
     setIsModalOpen(true);
   };
@@ -81,6 +86,7 @@ export default function Locations() {
         appreciationRate: formData.appreciationRate || '+12% YoY',
         description: formData.description.trim(),
         highlights: highlightsArray,
+        active: formData.active !== false,
         updatedAt: serverTimestamp(),
       };
 
@@ -99,7 +105,7 @@ export default function Locations() {
       await fetchLocations();
       setIsModalOpen(false);
     } catch (err) {
-      alert(`Save error: ${err.message}`);
+      showNotice('error', `Could not save location: ${err.message}`);
     }
   };
 
@@ -107,10 +113,11 @@ export default function Locations() {
     if (!deletingId) return;
     try {
       await deleteDoc(doc(db, LOCATIONS_COLLECTION, deletingId));
+      await logAdminAction({ action: 'LOCATION_DELETED', target: LOCATIONS_COLLECTION, targetId: deletingId });
       setLocations((prev) => prev.filter((l) => l.id !== deletingId));
       setDeletingId(null);
     } catch (err) {
-      alert(`Delete error: ${err.message}`);
+      showNotice('error', `Could not delete location: ${err.message}`);
     }
   };
 
@@ -187,6 +194,7 @@ export default function Locations() {
 
   return (
     <div className="space-y-6">
+      <AdminNotice notice={notice} onClose={clearNotice} />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-900 tracking-tight">
@@ -283,6 +291,11 @@ export default function Locations() {
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200"
                 />
               </div>
+
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                <input type="checkbox" checked={formData.active !== false} onChange={(event) => setFormData({ ...formData, active: event.target.checked })} />
+                Visible on the public website
+              </label>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
                 <button

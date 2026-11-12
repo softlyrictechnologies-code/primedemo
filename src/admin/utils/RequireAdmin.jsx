@@ -4,12 +4,12 @@ import { useAdminAuth } from '../context/AdminAuthContext';
 import { ShieldAlert, ArrowLeft, LogOut, Loader2 } from 'lucide-react';
 
 export default function RequireAdmin({ children }) {
-  const { currentUser, isAdmin, loading, logout, diagnostics } = useAdminAuth();
+  const { currentUser, isAuthorized, role, loading, logout, diagnostics } = useAdminAuth();
   const location = useLocation();
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white">
+      <div className="admin-auth-state min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white">
         <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center mb-4">
           <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
         </div>
@@ -25,9 +25,9 @@ export default function RequireAdmin({ children }) {
     return <Navigate to="/admin/login" state={{ from: location }} replace />;
   }
 
-  if (!isAdmin) {
+  if (!isAuthorized) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white selection:bg-red-500">
+      <div className="admin-auth-state min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white selection:bg-red-500">
         <div className="max-w-md w-full bg-slate-900 border border-red-500/30 rounded-3xl p-8 text-center shadow-2xl shadow-red-950/40 space-y-6">
           <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto text-red-400">
             <ShieldAlert className="w-8 h-8" />
@@ -70,6 +70,25 @@ export default function RequireAdmin({ children }) {
         </div>
       </div>
     );
+  }
+
+  const pathname = location.pathname;
+  const routeRoles = {
+    '/admin/dashboard': ['admin', 'editor', 'support'],
+    '/admin/properties': ['admin', 'editor'],
+    '/admin/locations': ['admin', 'editor'],
+    '/admin/insights': ['admin', 'editor'],
+    '/admin/content': ['admin', 'editor'],
+    '/admin/website-content': ['admin', 'editor'],
+    '/admin/inquiries': ['admin', 'support'],
+    '/admin/sellers': ['admin', 'support'],
+    '/admin/messages': ['admin', 'support'],
+    '/admin/users': ['admin'],
+    '/admin/logs': ['admin'],
+  };
+  const allowedRoles = routeRoles[pathname] || ['admin'];
+  if (!allowedRoles.includes(role) && role !== 'admin') {
+    return <Navigate to="/admin/dashboard" replace />;
   }
 
   return children;

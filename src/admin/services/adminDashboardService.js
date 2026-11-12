@@ -21,12 +21,16 @@ export async function getDashboardMetrics() {
     let totalProperties = 0;
     let publishedProperties = 0;
     let draftProperties = 0;
+    let soldOutProperties = 0;
     const corridorCounts = {};
 
     propertiesSnap.forEach((doc) => {
       totalProperties++;
       const data = doc.data();
-      if (data.published === true) publishedProperties++;
+      const soldOut = Boolean(data.isSoldOut || data.status === 'sold_out' || data.status === 'sold out');
+
+      if (data.published === true && !soldOut) publishedProperties++;
+      else if (soldOut) soldOutProperties++;
       else draftProperties++;
 
       const area = data.area || 'Other';
@@ -42,8 +46,9 @@ export async function getDashboardMetrics() {
     inquiriesSnap.forEach((doc) => {
       totalInquiries++;
       const data = doc.data();
-      if (data.status === 'new') newInquiries++;
-      if (data.status === 'completed') completedInquiries++;
+      const status = String(data.status || '').toLowerCase();
+      if (status === 'new') newInquiries++;
+      if (['completed', 'converted', 'closed'].includes(status)) completedInquiries++;
     });
 
     // 3. Fetch seller submissions
@@ -108,6 +113,7 @@ export async function getDashboardMetrics() {
         total: totalProperties,
         published: publishedProperties,
         draft: draftProperties,
+        soldOut: soldOutProperties,
         byCorridor: corridorCounts,
       },
       inquiries: {

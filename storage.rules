@@ -1,29 +1,50 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
     function isAdmin() {
-      return isAuthenticated() && request.auth.token.admin == true;
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.superAdmin == true ||
+        request.auth.token.role == 'admin' ||
+        request.auth.token.role == 'super_admin' ||
+        request.auth.token.role == 'super-admin' ||
+        firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid))
+      );
+    }
+    function isEditor() {
+      return request.auth != null && request.auth.token.role == 'editor';
+    }
+    function isImage() {
+      return request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
     }
 
-    function isValidImageUpload() {
-      return request.resource != null
-        && request.resource.contentType.matches('image/.*')
-        && request.resource.size > 0
-        && request.resource.size < 5 * 1024 * 1024;
-    }
-
-    match /properties/{propertyId}/{fileName} {
+    // Admin: property listing images (add, change, delete)
+    match /properties/{allPaths=**} {
       allow read: if true;
-      allow write: if isAdmin() && isValidImageUpload();
+      allow write: if (isAdmin() || isEditor()) && isImage();
+      allow delete: if isAdmin();
     }
 
-    match /submissions/{id}/{fileName} {
-      allow read: if isAdmin();
-      allow write: if isAuthenticated() && isValidImageUpload();
+    // Public site branding assets are readable on the website and writable by admins.
+    match /siteAssets/branding/{allPaths=**} {
+      allow read: if true;
+      allow write: if (isAdmin() || isEditor()) && isImage();
+      allow delete: if isAdmin();
+    }
+
+    // Public sellers/landowners: upload photos with a submission, admin reviews them
+    match /landowner_submissions/{allPaths=**} {
+      allow create: if isImage();
+      allow read, update, delete: if isAdmin();
+    }
+    match /sellerSubmissions/{allPaths=**} {
+      allow create: if isImage();
+      allow read, update, delete: if isAdmin();
+    }
+    match /submissions/{allPaths=**} {
+      allow create: if isImage();
+      allow read, update, delete: if isAdmin();
     }
 
     match /{allPaths=**} {

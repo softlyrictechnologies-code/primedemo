@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+import BrandLogo from '../../components/BrandLogo';
 import { useAdminAuth } from '../context/AdminAuthContext';
-import { Building2, Shield, Lock, Mail, AlertCircle, Loader2, ArrowLeft, CheckCircle2, Key } from 'lucide-react';
+import { Shield, Lock, Mail, AlertCircle, Loader2, ArrowLeft, CheckCircle2, Key } from 'lucide-react';
 
 export default function AdminLogin() {
-  const [email, setEmail] = useState('admin@gamil.com');
-  const [password, setPassword] = useState('admin@200');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState(null);
 
@@ -42,7 +43,7 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 sm:p-6 text-white selection:bg-indigo-600">
+    <div className="admin-login min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 sm:p-6 text-white selection:bg-indigo-600">
       {/* Background ambient gradient glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[120px]"></div>
@@ -61,16 +62,16 @@ export default function AdminLogin() {
           </Link>
           <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[10px] font-bold text-slate-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            <span>prime-housing</span>
+            <span>prime housing</span>
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-slate-900/90 backdrop-blur-2xl border border-slate-800 rounded-[2.5rem] p-6 sm:p-8 shadow-2xl shadow-black/80 space-y-6">
+        <div className="admin-login-card bg-slate-900/90 backdrop-blur-2xl border border-slate-800 rounded-[2.5rem] p-6 sm:p-8 shadow-2xl shadow-black/80 space-y-6">
           {/* Logo & Headline */}
           <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-400 p-0.5 mx-auto shadow-lg shadow-indigo-600/30 flex items-center justify-center text-white mb-3">
-              <Building2 className="w-8 h-8" />
+            <div className="mx-auto mb-3 flex w-20 items-center justify-center rounded-lg bg-white p-2 shadow-lg shadow-indigo-600/20">
+              <BrandLogo className="h-12 w-auto object-contain" />
             </div>
             <h1 className="text-2xl font-black tracking-tight text-white">
               Administrator Console
@@ -100,16 +101,17 @@ export default function AdminLogin() {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+              <label htmlFor="admin-email" className="block text-xs font-bold text-slate-300 mb-1.5">
                 Admin Email Address
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
+                  id="admin-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@gamil.com"
+                  placeholder="name@example.com"
                   required
                   autoComplete="email"
                   className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-800/80 border border-slate-700/80 text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all font-medium"
@@ -118,12 +120,13 @@ export default function AdminLogin() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+              <label htmlFor="admin-password" className="block text-xs font-bold text-slate-300 mb-1.5">
                 Password
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
+                  id="admin-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -160,7 +163,7 @@ export default function AdminLogin() {
           <div className="pt-4 border-t border-slate-800/80 text-center">
             <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Dedicated Administrator Account: <span className="font-bold text-slate-300">admin@gamil.com</span></span>
+              <span>Sign in with the administrator account provided by your organization.</span>
             </div>
           </div>
         </div>

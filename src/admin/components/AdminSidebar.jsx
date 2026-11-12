@@ -1,6 +1,8 @@
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { useAdminAuth } from '../context/AdminAuthContext';
+import BrandLogo from '../../components/BrandLogo';
+import { usePublicSiteContent } from '../../services/publicSiteContent.js';
 import {
   LayoutDashboard,
   Building2,
@@ -8,26 +10,38 @@ import {
   FileCheck2,
   MessageSquare,
   MapPin,
-  TrendingUp,
   ExternalLink,
   LogOut,
   X,
   ShieldCheck,
   Sparkles,
+  Users,
+  Activity,
+  BookOpen,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
-  { name: 'Landowner Submissions', path: '/admin/sellers', icon: FileCheck2 },
-  { name: 'Property Management', path: '/admin/properties', icon: Building2 },
-  { name: 'Buyer Enquiries', path: '/admin/inquiries', icon: CalendarCheck2 },
-  { name: 'Locations and Categories', path: '/admin/locations', icon: MapPin },
-  { name: 'Website Content', path: '/admin/content', icon: MessageSquare },
-  { name: 'User and Settings Management', path: '/admin/settings', icon: TrendingUp },
+  { name: 'Properties', path: '/admin/properties', icon: Building2 },
+  { name: 'Buyer Inquiries', path: '/admin/inquiries', icon: CalendarCheck2 },
+  { name: 'Seller Submissions', path: '/admin/sellers', icon: FileCheck2 },
+  { name: 'Users', path: '/admin/users', icon: Users },
+  { name: 'Messages', path: '/admin/messages', icon: MessageSquare },
+  { name: 'Locations & Areas', path: '/admin/locations', icon: MapPin },
+  { name: 'Insights & Guides', path: '/admin/insights', icon: BookOpen },
+  { name: 'Audit Logs', path: '/admin/logs', icon: Activity },
+  { name: 'Website Content', path: '/admin/content', icon: Sparkles },
 ];
 
 export default function AdminSidebar({ isOpen, onClose }) {
-  const { currentUser, logout, adminProfile } = useAdminAuth();
+  const { currentUser, logout, adminProfile, isSuperAdmin, role } = useAdminAuth();
+  const siteContent = usePublicSiteContent();
+  const allowedItems = NAV_ITEMS.filter((item) => {
+    if (role === 'admin') return true;
+    if (role === 'editor') return ['/admin/dashboard', '/admin/properties', '/admin/locations', '/admin/insights', '/admin/content'].includes(item.path);
+    if (role === 'support') return ['/admin/dashboard', '/admin/inquiries', '/admin/sellers', '/admin/messages'].includes(item.path);
+    return false;
+  });
 
   return (
     <>
@@ -41,29 +55,27 @@ export default function AdminSidebar({ isOpen, onClose }) {
 
       {/* Sidebar container */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        className={`admin-sidebar fixed top-0 bottom-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 ${
           isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
         }`}
       >
         {/* Brand Header */}
         <div className="h-16 px-6 flex items-center justify-between border-b border-slate-800/80 bg-slate-950/40">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
-              <Building2 className="w-5 h-5" />
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="rounded-lg bg-white p-1.5 shadow-sm">
+              <BrandLogo className="h-8 w-auto object-contain" alt={siteContent.companyName || 'Prime Housing'} />
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-black text-white text-base tracking-tight">Prime Housing</span>
-                <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                  ADMIN
-                </span>
-              </div>
-              <p className="text-[10px] font-medium text-slate-400">Chennai Operations</p>
+            <div className="shrink-0">
+              <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                ADMIN
+              </span>
             </div>
           </div>
 
           <button
             onClick={onClose}
+            type="button"
+            aria-label="Close admin navigation"
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 lg:hidden"
           >
             <X className="w-5 h-5" />
@@ -75,7 +87,7 @@ export default function AdminSidebar({ isOpen, onClose }) {
           <p className="px-3 pb-2 text-[10px] font-black uppercase tracking-wider text-slate-500">
             Management Modules
           </p>
-          {NAV_ITEMS.map((item) => {
+          {allowedItems.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -125,13 +137,15 @@ export default function AdminSidebar({ isOpen, onClose }) {
                 </p>
                 <div className="flex items-center gap-1 text-[10px] text-emerald-400">
                   <ShieldCheck className="w-3 h-3 shrink-0" />
-                  <span className="truncate">Verified Admin</span>
+                  <span className="truncate">{isSuperAdmin ? 'Super Admin' : 'Verified Admin'}</span>
                 </div>
               </div>
             </div>
 
             <button
               onClick={logout}
+              type="button"
+              aria-label="Sign out"
               className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
               title="Sign Out"
             >

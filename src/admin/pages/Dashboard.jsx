@@ -67,16 +67,16 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Top Banner / Welcome Bar */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border border-slate-800">
+      <div className="admin-dashboard-hero p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border border-slate-800">
         <div>
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 tracking-wider uppercase mb-2 inline-block">
             Prime Housing Operations
           </span>
           <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-            Live Platform Command Center
+            Property operations overview
           </h2>
           <p className="text-xs text-slate-300 mt-1 max-w-xl">
-            Real-time synchronization across property operations and approved listings for Prime Housing.
+            Review listings, buyer enquiries, and landowner submissions from one workspace.
           </p>
         </div>
 
@@ -88,7 +88,7 @@ export default function Dashboard() {
             title="Refresh live metrics"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Sync Stats</span>
+            <span>Refresh dashboard</span>
           </button>
 
           <Link
@@ -101,71 +101,72 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 4 Core KPI Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        {/* Properties Card */}
+      {/* KPI Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-5">
         <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Inventory</span>
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Building2 className="w-5 h-5" />
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Published</span>
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
           <div className="space-y-1">
-            <div className="text-3xl font-black text-slate-900">{properties?.total || 0}</div>
-            <p className="text-xs text-slate-500 font-medium">Total Managed Plots</p>
-          </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-emerald-600 font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              {properties?.published || 0} Published
-            </span>
-            <span className="text-slate-400 font-medium">{properties?.draft || 0} Drafts</span>
+            <div className="text-3xl font-black text-slate-900">{properties?.published || 0}</div>
+            <p className="text-xs text-slate-500 font-medium">Active Listings</p>
           </div>
         </div>
 
-        {/* Site Visits / Inquiries Card */}
         <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Buyer Leads</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Pending</span>
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <FileCheck2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="text-3xl font-black text-slate-900">{sellers?.pending || 0}</div>
+            <p className="text-xs text-slate-500 font-medium">Landowner Submissions</p>
+          </div>
+        </div>
+
+        <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Buyer Enquiries</span>
             <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <CalendarCheck2 className="w-5 h-5" />
             </div>
           </div>
           <div className="space-y-1">
             <div className="text-3xl font-black text-slate-900">{inquiries?.total || 0}</div>
-            <p className="text-xs text-slate-500 font-medium">Site Visit Requests</p>
-          </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-blue-600 font-black flex items-center gap-1 animate-pulse">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-              {inquiries?.new || 0} Action Needed
-            </span>
-            <span className="text-slate-400 font-medium">{inquiries?.completed || 0} Completed</span>
+            <p className="text-xs text-slate-500 font-medium">New + Follow-up</p>
           </div>
         </div>
 
-        {/* Seller Submissions Card */}
         <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Land Proposals</span>
-            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <FileCheck2 className="w-5 h-5" />
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Sold Out</span>
+            <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
+              <Building2 className="w-5 h-5" />
             </div>
           </div>
           <div className="space-y-1">
-            <div className="text-3xl font-black text-slate-900">{sellers?.total || 0}</div>
-            <p className="text-xs text-slate-500 font-medium">Seller Submissions</p>
-          </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-amber-600 font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-              {sellers?.pending || 0} Pending Review
-            </span>
-            <span className="text-emerald-600 font-medium">{sellers?.approved || 0} Approved</span>
+            <div className="text-3xl font-black text-slate-900">{properties?.soldOut || 0}</div>
+            <p className="text-xs text-slate-500 font-medium">Unavailable Plots</p>
           </div>
         </div>
 
+        <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Messages</span>
+            <div className="w-10 h-10 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center">
+              <MessageSquare className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="text-3xl font-black text-slate-900">{messages?.total || 0}</div>
+            <p className="text-xs text-slate-500 font-medium">Unread + New</p>
+          </div>
+        </div>
       </div>
 
       {/* Two Column Layout: Corridor Analytics */}
@@ -241,7 +242,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                    Verify Land Titles
+                    Review submissions
                   </p>
                   <p className="text-[11px] text-slate-500">{sellers?.pending || 0} pending review</p>
                 </div>

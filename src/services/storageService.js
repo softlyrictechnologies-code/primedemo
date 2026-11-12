@@ -1,3 +1,6 @@
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { auth, storage } from '../firebase.js';
+
 export const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -21,90 +24,104 @@ export function validateImageFile(file) {
   return true;
 }
 
-function getCloudinaryEnv() {
-  const cloudName =
-    (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_CLOUDINARY_CLOUD_NAME) ||
-    (typeof process !== 'undefined' && process.env && process.env.VITE_CLOUDINARY_CLOUD_NAME) ||
-    '';
+function cleanFileName(fileName = 'image') {
+  const cleaned = String(fileName || 'image')
+    .split(/[\\/]/)
+    .pop()
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 
-  const uploadPreset =
-    (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET) ||
-    (typeof process !== 'undefined' && process.env && process.env.VITE_CLOUDINARY_UPLOAD_PRESET) ||
-    '';
-
-  return { cloudName, uploadPreset };
+  return cleaned || 'image';
 }
 
-async function uploadToCloudinary(file, folder, onProgress = () => {}) {
+async function uploadToFirebaseStorage(file, storagePath, onProgress = () => {}, metadata = {}) {
   validateImageFile(file);
 
-  const { cloudName, uploadPreset } = getCloudinaryEnv();
-
-  if (!cloudName || !uploadPreset) {
-    throw new Error('Cloudinary is not configured. Add VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET to your environment.');
-  }
-
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('upload_preset', uploadPreset);
-  formData.append('folder', folder);
+  const currentUser = auth.currentUser;
+  const storageRef = ref(storage, storagePath);
+  const uploadTask = uploadBytesResumable(storageRef, file, {
+    contentType: file.type,
+    customMetadata: {
+      ...metadata,
+      uploadedBy: currentUser?.uid || 'public-seller',
+    },
+  });
 
   return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-
-    xhr.upload.onprogress = (event) => {
-      if (!event.lengthComputable) return;
-      const progress = Math.round((event.loaded / event.total) * 100);
-      onProgress({
-        fileName: file.name,
-        progress,
-        bytesTransferred: event.loaded,
-        totalBytes: event.total,
-      });
-    };
-
-    xhr.onload = () => {
-      try {
-        const response = JSON.parse(xhr.responseText || '{}');
-
-        if (xhr.status >= 200 && xhr.status < 300 && response?.secure_url) {
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = snapshot.totalBytes > 0 ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100 : 0;
+        onProgress({
+          fileName: file.name,
+          progress,
+          bytesTransferred: snapshot.bytesTransferred,
+          totalBytes: snapshot.totalBytes,
+        });
+      },
+      (error) => reject(error),
+      async () => {
+        try {
+          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
           resolve({
-            downloadUrl: response.secure_url,
-            storagePath: response.public_id,
+            downloadUrl,
+            storagePath: uploadTask.snapshot.ref.fullPath,
             fileName: file.name,
             fileSize: file.size,
           });
-          return;
+        } catch (error) {
+          reject(error);
         }
-
-        reject(new Error(response?.error?.message || 'Cloudinary image upload failed.'));
-      } catch (error) {
-        reject(new Error('Cloudinary image upload failed.'));
       }
-    };
-
-    xhr.onerror = () => {
-      reject(new Error('Network error while uploading image to Cloudinary.'));
-    };
-
-    xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`);
-    xhr.send(formData);
+    );
   });
 }
 
 /**
- * Uploads a property image to Cloudinary.
+ * Uploads a property image to Firebase Storage.
  * Returns download URL and storage path.
  */
 export async function uploadPropertyImage(file, propertyId = 'general', onProgress = () => {}) {
-  return uploadToCloudinary(file, `properties/${propertyId}`, onProgress);
+  const safeFileName = cleanFileName(file.name);
+  const storagePath = `properties/${propertyId}/${Date.now()}_${safeFileName}`;
+  return uploadToFirebaseStorage(file, storagePath, onProgress, { propertyId });
 }
 
 /**
- * Uploads a seller submission image to Cloudinary.
+ * Uploads a seller submission image to Firebase Storage.
  */
 export async function uploadSellerSubmissionImage(file, submissionId = 'temp', onProgress = () => {}) {
-  return uploadToCloudinary(file, `submissions/${submissionId}`, onProgress);
+  const safeFileName = cleanFileName(file.name);
+  const storagePath = `sellerSubmissions/${submissionId}/${Date.now()}_${safeFileName}`;
+  return uploadToFirebaseStorage(file, storagePath, onProgress, { submissionId });
+}
+
+export async function deleteSellerSubmissionImageByUrl(imageUrl, submissionId = '') {
+  if (!imageUrl) {
+    return false;
+  }
+
+  let normalizedPath = String(imageUrl).trim();
+
+  if (normalizedPath.includes('firebasestorage.googleapis.com') || normalizedPath.includes('storage.googleapis.com')) {
+    const match = normalizedPath.match(/\/o\/(.+?)(\?|$)/);
+    if (match) {
+      normalizedPath = decodeURIComponent(match[1]).replace(/%2F/g, '/');
+    }
+  }
+
+  normalizedPath = normalizedPath.replace(/^\/+/, '');
+
+  if (!normalizedPath.startsWith('sellerSubmissions/')) {
+    return false;
+  }
+
+  if (submissionId && !normalizedPath.startsWith(`sellerSubmissions/${submissionId}/`)) {
+    return false;
+  }
+
+  await deleteObject(ref(storage, normalizedPath));
+  return true;
 }
 
 export async function uploadPropertyImages(files = [], propertyId = 'general', onProgress = () => {}) {
@@ -126,10 +143,30 @@ export async function uploadPropertyImages(files = [], propertyId = 'general', o
   );
 }
 
-/**
- * Unsigned Cloudinary uploads cannot be safely deleted from the browser,
- * so this is intentionally a safe no-op.
- */
-export async function deletePropertyImageByUrl() {
-  return false;
+export async function deletePropertyImageByUrl(imageUrl, propertyId = '') {
+  if (!imageUrl) {
+    return false;
+  }
+
+  let normalizedPath = String(imageUrl).trim();
+
+  if (normalizedPath.includes('firebasestorage.googleapis.com') || normalizedPath.includes('storage.googleapis.com')) {
+    const match = normalizedPath.match(/\/o\/(.+?)(\?|$)/);
+    if (match) {
+      normalizedPath = decodeURIComponent(match[1]).replace(/%2F/g, '/');
+    }
+  }
+
+  normalizedPath = normalizedPath.replace(/^\/+/, '');
+
+  if (!normalizedPath.startsWith('properties/')) {
+    return false;
+  }
+
+  if (propertyId && !normalizedPath.startsWith(`properties/${propertyId}/`)) {
+    return false;
+  }
+
+  await deleteObject(ref(storage, normalizedPath));
+  return true;
 }

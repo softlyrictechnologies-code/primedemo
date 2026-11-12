@@ -1,7 +1,7 @@
 import React from 'react';
-import { X, SlidersHorizontal, CheckCircle2, ShieldCheck, MapPin, Calendar } from 'lucide-react';
+import { X, SlidersHorizontal, CheckCircle2, ShieldCheck, MapPin } from 'lucide-react';
 
-export default function PlotComparisonDrawer({ comparePlots, onClose, onRemovePlot, onScheduleVisit }) {
+export default function PlotComparisonDrawer({ comparePlots, onClose, onRemovePlot }) {
   if (comparePlots.length === 0) return null;
 
   return (
@@ -46,15 +46,6 @@ export default function PlotComparisonDrawer({ comparePlots, onClose, onRemovePl
                       <img src={plot.image} alt={plot.title} className="w-full h-24 object-cover rounded-xl" />
                       <h4 className="font-extrabold text-[#111827] text-xs line-clamp-1">{plot.title}</h4>
                       <p className="text-sm font-black text-[#1B4D3E]">{plot.formattedPrice}</p>
-                      <button
-                        onClick={() => {
-                          onClose();
-                          onScheduleVisit(plot);
-                        }}
-                        className="w-full py-1.5 rounded-xl bg-[#1B4D3E] text-white font-bold text-[11px] flex items-center justify-center gap-1"
-                      >
-                        <Calendar className="w-3 h-3 text-emerald-300" /> Book Visit
-                      </button>
                     </div>
                   </th>
                 ))}

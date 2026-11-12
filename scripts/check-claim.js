@@ -13,7 +13,11 @@ dotenv.config({ path: path.join(rootDir, '.env.local') });
 dotenv.config({ path: path.join(rootDir, '.env') });
 
 const EXPECTED_PROJECT_ID = process.env.VITE_FIREBASE_PROJECT_ID || 'plotfinder-be7f5';
-const targetEmail = (process.argv[2] || 'admin@gmail.com').trim().toLowerCase();
+const targetEmail = (process.argv[2] || '').trim().toLowerCase();
+if (!targetEmail) {
+  console.error('Usage: node scripts/check-claim.js <account-email>');
+  process.exit(1);
+}
 
 function resolveCredentials() {
   const candidatePaths = [

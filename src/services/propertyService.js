@@ -1,224 +1,139 @@
-import {
-  collection,
-  getDocs,
-  getDoc,
-  doc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, addDoc, updateDoc, deleteDoc, where, query, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase.js';
+import { assertValidPropertyTitle, assertPublishableProperty } from '../utils/propertyValidation.js';
 
 export const PROPERTIES_COLLECTION = 'properties';
-
-// Re-export submitInquiry for backward compatibility with existing components
 export { submitInquiry } from './inquiryService.js';
 
-/**
- * Normalizes property document data so it seamlessly matches
- * both the Firestore schema and existing PlotFinder UI component expectations.
- */
 export function normalizePropertyDoc(id, data = {}) {
-  const areaSqFt = data.areaSqFt ?? data.totalAreaSqft ?? 1200;
-  const price = data.price ?? (data.priceLakhs ? data.priceLakhs * 100000 : 0);
-  const priceLakhs = data.priceLakhs ?? (price ? Number((price / 100000).toFixed(2)) : 0);
-  const formattedPrice = data.formattedPrice ?? (
-    priceLakhs >= 100
-      ? `₹${(priceLakhs / 100).toFixed(2)} Crores`
-      : `₹${priceLakhs} Lakhs`
-  );
-  const rawImages = Array.isArray(data.images) && data.images.length > 0
-    ? data.images
-    : (Array.isArray(data.imageUrls) ? data.imageUrls : (data.image ? [data.image] : []));
-  
-  const mainImage = rawImages.length > 0
-    ? rawImages[0]
-    : 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=80';
-
+  const areaSqFt = Number(data.areaSqFt ?? data.totalAreaSqft ?? data.sqft ?? 1200);
+  const price = Number(data.price ?? (Number(data.priceLakhs || 0) * 100000));
+  const images = Array.isArray(data.images) && data.images.length ? data.images : (Array.isArray(data.imageUrls) && data.imageUrls.length ? data.imageUrls : (data.image ? [data.image] : []));
+  const status = String(data.status || (data.published === false ? 'draft' : 'published')).toLowerCase();
+  const isSoldOut = Boolean(data.isSoldOut || status === 'sold_out' || status === 'sold out');
   return {
+    ...data,
     id,
     title: data.title || 'Untitled Property',
-    subTitle: data.subTitle || data.description?.slice(0, 80) || '',
     description: data.description || '',
-    propertyType: data.propertyType || data.type || 'Residential Plot',
     type: data.type || data.propertyType || 'Residential Plot',
-    price: price,
-    priceLakhs: priceLakhs,
-    formattedPrice: formattedPrice,
+    propertyType: data.propertyType || data.type || 'Residential Plot',
     location: data.location || (data.area ? `${data.area}, Chennai` : 'Chennai'),
-    city: data.city || 'Chennai',
     area: data.area || 'OMR',
-    bedrooms: data.bedrooms ?? 0,
-    bathrooms: data.bathrooms ?? 0,
-    areaSqFt: areaSqFt,
-    totalAreaSqft: data.totalAreaSqft ?? areaSqFt,
-    pricePerSqft: data.pricePerSqFt ?? data.pricePerSqft ?? Math.round(price / (areaSqFt || 1)),
-    pricePerSqFt: data.pricePerSqFt ?? data.pricePerSqft ?? Math.round(price / (areaSqFt || 1)),
-    images: rawImages,
-    imageUrls: rawImages,
-    image: mainImage,
-    gallery: rawImages.length > 0 ? rawImages : [mainImage],
-    dimensions: data.dimensions || '30 ft x 40 ft',
-    facing: data.facing || 'East Facing',
-    roadWidth: data.roadWidth || '30 Feet Road',
-    approval: data.approval || 'CMDA & DTCP Approved',
-    approvalNo: data.approvalNo || 'CMDA/REG/2024',
-    verified: data.verified ?? true,
-    featured: data.featured ?? false,
-    pattaStatus: data.pattaStatus || 'Clear Ownership Patta',
-    waterSource: data.waterSource || 'Sweet Potable Water',
-    bankLoans: Array.isArray(data.bankLoans) ? data.bankLoans : ['HDFC', 'SBI', 'ICICI'],
-    landmarks: Array.isArray(data.landmarks) ? data.landmarks : ['Near OMR IT Expressway'],
-    amenities: Array.isArray(data.amenities) ? data.amenities : ['24/7 Security', 'Tar Road', 'EB Line'],
-    appreciationRate: data.appreciationRate || '+12.5% YoY',
-    coordinates: data.coordinates || { lat: 12.83, lng: 80.22 },
+    areaSqFt,
+    totalAreaSqft: Number(data.totalAreaSqft ?? areaSqFt),
+    price,
+    priceLakhs: Number(data.priceLakhs ?? (price / 100000)),
+    pricePerSqft: Number(data.pricePerSqFt ?? data.pricePerSqft ?? Math.round(price / Math.max(areaSqFt, 1))),
+    pricePerSqFt: Number(data.pricePerSqFt ?? data.pricePerSqft ?? Math.round(price / Math.max(areaSqFt, 1))),
+    image: images[0] || 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=80',
+    images,
+    gallery: images,
     published: data.published ?? true,
-    createdBy: data.createdBy || 'community-admin',
-    isDemo: data.isDemo ?? false,
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
+    featured: Boolean(data.featured),
+    isSoldOut,
+    status: isSoldOut ? 'sold_out' : status,
+    createdAt: data.createdAt || new Date().toISOString(),
   };
 }
 
-/**
- * Fetch all published properties from Firestore
- */
-export async function getPublishedProperties() {
-  try {
-    const propertiesRef = collection(db, PROPERTIES_COLLECTION);
-    const q = query(propertiesRef, where('published', '==', true));
-    const snapshot = await getDocs(q);
+const readAllPublished = async () => {
+  const snapshot = await getDocs(query(collection(db, PROPERTIES_COLLECTION), where('published', '==', true)));
+  return snapshot.docs.map((item) => normalizePropertyDoc(item.id, item.data()));
+};
 
-    const properties = [];
-    snapshot.forEach((docSnap) => {
-      properties.push(normalizePropertyDoc(docSnap.id, docSnap.data()));
-    });
-    return properties;
-  } catch (error) {
-    console.error('Error fetching published properties from Firestore:', error);
-    throw error;
-  }
+export async function getPublishedProperties() {
+  return readAllPublished();
 }
 
-/**
- * Fetch a single property by document ID
- */
+/** Filter and paginate client-side so listing discovery does not depend on a composite Firestore index. */
+export async function getPublishedPropertiesPage({ pageSize = 24, cursor = null, sortBy = 'newest', filters = {} } = {}) {
+  const all = await readAllPublished();
+  const selected = all.filter((property) => {
+    const location = String(property.location || '').toLowerCase();
+    const type = String(property.type || property.propertyType || '').toLowerCase();
+    const selectedLocation = String(filters.location || '').toLowerCase();
+    const selectedType = String(filters.type || '').toLowerCase();
+    const typeMatches = !selectedType || selectedType === 'all types' || type === selectedType || (selectedType === 'residential plot' && /(residential|villa|gated)/.test(type)) || (selectedType === 'commercial plot' && type.includes('commercial')) || (selectedType === 'agricultural land' && /(agricultural|farm)/.test(type));
+    return (!selectedLocation || selectedLocation === 'all locations' || location.includes(selectedLocation) || String(property.area || '').toLowerCase() === selectedLocation) && typeMatches;
+  });
+  const timestamp = (item) => item.createdAt?.seconds || (item.createdAt ? Date.parse(item.createdAt) / 1000 : 0);
+  selected.sort((a, b) => sortBy === 'price-low'
+    ? a.priceLakhs - b.priceLakhs
+    : sortBy === 'price-high'
+      ? b.priceLakhs - a.priceLakhs
+      : timestamp(b) - timestamp(a));
+  const offset = Math.max(0, Number(cursor) || 0);
+  const size = Math.max(1, Math.min(Number(pageSize) || 24, 50));
+  const properties = selected.slice(offset, offset + size);
+  return { properties, cursor: offset + properties.length, hasMore: offset + properties.length < selected.length };
+}
+
+export async function getHomepageProperties({ pageSize = 12, featuredLimit = 6 } = {}) {
+  const all = await readAllPublished();
+  const featured = all.filter((property) => property.featured).slice(0, featuredLimit);
+  const recent = [...all].sort((a, b) => {
+    const aTime = a.createdAt?.seconds || (a.createdAt ? Date.parse(a.createdAt) / 1000 : 0);
+    const bTime = b.createdAt?.seconds || (b.createdAt ? Date.parse(b.createdAt) / 1000 : 0);
+    return bTime - aTime;
+  }).slice(0, pageSize);
+  return [...new Map([...featured, ...recent].map((property) => [property.id, property])).values()];
+}
+
 export async function getPropertyById(id) {
   if (!id) throw new Error('Property ID is required.');
-  try {
-    const docRef = doc(db, PROPERTIES_COLLECTION, id);
-    const docSnap = await getDoc(docRef);
-
-    if (!docSnap.exists()) {
-      return null;
-    }
-
-    return normalizePropertyDoc(docSnap.id, docSnap.data());
-  } catch (error) {
-    console.error(`Error fetching property ${id} from Firestore:`, error);
-    throw error;
-  }
+  const snapshot = await getDoc(doc(db, PROPERTIES_COLLECTION, id));
+  return snapshot.exists() ? normalizePropertyDoc(snapshot.id, snapshot.data()) : null;
 }
 
-/**
- * Add a new property listing through an authorized workflow.
- * Restricts unrestricted public modification.
- */
-export async function addProperty(propertyData) {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Authentication required to create property listings.');
-  }
-
-  if (!propertyData.title || typeof propertyData.title !== 'string') {
-    throw new Error('Property title is required.');
-  }
-
-  try {
-    const propertiesRef = collection(db, PROPERTIES_COLLECTION);
-
-    const images = Array.isArray(propertyData.images) && propertyData.images.length > 0
-      ? propertyData.images
-      : (propertyData.image ? [propertyData.image] : []);
-
-    const areaSqFt = Number(propertyData.areaSqFt) || Number(propertyData.sqft) || 1200;
-    const price = Number(propertyData.price) || (Number(propertyData.priceLakhs) * 100000) || 0;
-    const pricePerSqFt = propertyData.pricePerSqFt || Math.round(price / (areaSqFt || 1));
-
-    const docPayload = {
-      title: propertyData.title.trim().slice(0, 200),
-      description: (propertyData.description || '').slice(0, 2500),
-      propertyType: propertyData.propertyType || propertyData.type || 'Residential Plot',
-      location: propertyData.location || `${propertyData.area || 'OMR'}, Chennai`,
-      area: propertyData.area || propertyData.locality || 'OMR',
-      areaSqFt: areaSqFt,
-      price: price,
-      pricePerSqFt: pricePerSqFt,
-      facing: propertyData.facing || 'East Facing',
-      approval: propertyData.approval || 'CMDA Approved',
-      approvalNo: propertyData.approvalNo || 'Pending Issuance',
-      amenities: Array.isArray(propertyData.amenities) ? propertyData.amenities : ['24/7 Security', 'Tar Road', 'EB Line'],
-      images: images,
-      imageUrls: images,
-      featured: Boolean(propertyData.featured),
-      published: propertyData.published ?? true,
-      createdBy: currentUser.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-
-    const docRef = await addDoc(propertiesRef, docPayload);
-    return { id: docRef.id, ...docPayload };
-  } catch (error) {
-    console.error('Error adding property to Firestore:', error);
-    throw error;
-  }
+function propertyPayload(data = {}) {
+  assertValidPropertyTitle(data.title);
+  const images = Array.isArray(data.images) ? data.images.filter(Boolean) : (data.image ? [data.image] : []);
+  const areaSqFt = Number(data.areaSqFt || data.totalAreaSqft || data.sqft || 1200);
+  const price = Number(data.price || Number(data.priceLakhs || 0) * 100000);
+  const sold = Boolean(data.isSoldOut || data.status === 'sold_out' || data.status === 'sold out');
+  const payload = {
+    ...data,
+    title: String(data.title).trim().replace(/\s+/g, ' ').slice(0, 100),
+    description: String(data.description || '').slice(0, 2500),
+    propertyType: data.propertyType || data.type || 'Residential Plot',
+    type: data.type || data.propertyType || 'Residential Plot',
+    areaSqFt,
+    totalAreaSqft: areaSqFt,
+    price,
+    priceLakhs: Number(data.priceLakhs || price / 100000),
+    pricePerSqFt: Number(data.pricePerSqFt || Math.round(price / Math.max(areaSqFt, 1))),
+    images,
+    imageUrls: images,
+    image: images[0] || '',
+    published: sold || Boolean(data.published),
+    featured: Boolean(data.featured),
+    verified: Boolean(data.verified),
+    isSoldOut: sold,
+    status: sold ? 'sold_out' : (data.published ? 'published' : 'draft'),
+    soldOutAt: sold ? (data.soldOutAt || serverTimestamp()) : null,
+    updatedAt: serverTimestamp(),
+  };
+  if (payload.published) assertPublishableProperty(payload);
+  return payload;
 }
 
-/**
- * Update an existing property document.
- * Requires authentication and authorization.
- */
-export async function updateProperty(id, propertyData) {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Authentication required to update property listings.');
-  }
-
-  try {
-    const docRef = doc(db, PROPERTIES_COLLECTION, id);
-    const updatePayload = {
-      ...propertyData,
-      updatedAt: serverTimestamp(),
-    };
-
-    await updateDoc(docRef, updatePayload);
-    return { id, ...updatePayload };
-  } catch (error) {
-    console.error(`Error updating property ${id} in Firestore:`, error);
-    throw error;
-  }
+export async function addProperty(data) {
+  if (!auth.currentUser) throw new Error('Authentication required to create property listings.');
+  const payload = { ...propertyPayload(data), createdBy: auth.currentUser.uid, createdAt: serverTimestamp() };
+  const ref = await addDoc(collection(db, PROPERTIES_COLLECTION), payload);
+  return { id: ref.id, ...payload };
 }
 
-/**
- * Delete a property listing.
- * Restricted to administrators or authenticated listing owners.
- */
+export async function updateProperty(id, data) {
+  if (!auth.currentUser) throw new Error('Authentication required to update property listings.');
+  const payload = propertyPayload(data);
+  await updateDoc(doc(db, PROPERTIES_COLLECTION, id), payload);
+  return { id, ...payload };
+}
+
 export async function deleteProperty(id) {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Authentication required to delete property listings.');
-  }
-
-  try {
-    const docRef = doc(db, PROPERTIES_COLLECTION, id);
-    await deleteDoc(docRef);
-    return { id, deleted: true };
-  } catch (error) {
-    console.error(`Error deleting property ${id} from Firestore:`, error);
-    throw error;
-  }
+  if (!auth.currentUser) throw new Error('Authentication required to delete property listings.');
+  await deleteDoc(doc(db, PROPERTIES_COLLECTION, id));
+  return { id, deleted: true };
 }

@@ -40,9 +40,13 @@ export default function ConfirmDialog({
   const style = variantStyles[variant] || variantStyles.danger;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150" role="presentation">
       <div 
         className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all scale-100 animate-in zoom-in-95 duration-150"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-message"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6">
@@ -51,8 +55,8 @@ export default function ConfirmDialog({
               {style.icon}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-base font-bold text-slate-900 mb-1">{title}</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">{message}</p>
+              <h3 id="confirm-dialog-title" className="text-base font-bold text-slate-900 mb-1">{title}</h3>
+              <p id="confirm-dialog-message" className="text-xs text-slate-500 leading-relaxed">{message}</p>
             </div>
           </div>
         </div>

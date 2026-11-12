@@ -1,158 +1,230 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() {
-      return request.auth != null;
-    }
 
-    function isOwner(uid) {
-      return isSignedIn() && request.auth.uid == uid;
+    function isSignedIn() { return request.auth != null; }
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.superAdmin == true ||
+        request.auth.token.role == 'super_admin' ||
+        request.auth.token.role == 'super-admin'
+      );
     }
-
     function isAdmin() {
-      return request.auth != null
-        && request.auth.token.admin == true;
-    }
-
-    function hasNonEmptyString(value, minLength, maxLength) {
-      return value is string &&
-        value.trim().size() >= minLength &&
-        value.trim().size() <= maxLength;
-    }
-
-    function isPhoneNumber(value) {
-      return value is string &&
-        value.size() <= 40 &&
-        value.trim().matches('^[+()\\-\\s]*([0-9][+()\\-\\s]*){8,20}$');
-    }
-
-    function isValidEmail(value) {
-      return value == null || value == '' || (
-        value is string &&
-        value.size() <= 254 &&
-        value.matches('^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$')
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        request.auth.token.superAdmin == true ||
+        request.auth.token.role == 'admin' ||
+        request.auth.token.role == 'super_admin' ||
+        request.auth.token.role == 'super-admin' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
-
-    match /properties/{propertyId} {
-      allow read: if resource.data.published == true || isAdmin();
-      allow create: if isAdmin() &&
-        request.resource.data.title is string &&
-        request.resource.data.title.trim().size() > 0 &&
-        request.resource.data.title.size() <= 200 &&
-        request.resource.data.location is string &&
-        request.resource.data.location.size() > 0 &&
-        request.resource.data.area is string &&
-        request.resource.data.area.size() > 0 &&
-        request.resource.data.areaSqFt is number &&
-        request.resource.data.areaSqFt > 0 &&
-        request.resource.data.price is number &&
-        request.resource.data.price >= 0 &&
-        request.resource.data.published is bool &&
-        request.resource.data.createdBy == request.auth.uid;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+    function isEditor() {
+      return isSignedIn() && request.auth.token.role == 'editor';
+    }
+    function isSupport() {
+      return isSignedIn() && request.auth.token.role == 'support';
+    }
+    function canManageListings() { return isAdmin() || isEditor(); }
+    function canManageLeads() { return isAdmin() || isSupport(); }
+    function canReadAdminData() { return isAdmin() || isEditor() || isSupport(); }
+    function hasValidPropertyTitle(data) {
+      return data.title is string
+        && data.title.size() >= 12
+        && data.title.size() <= 100
+        && data.title.matches('.*[A-Za-z].*')
+        && data.title.matches('.* .*');
+    }
+    function isPublishableProperty(data) {
+      return data.published == true
+        && data.verified == true
+        && hasValidPropertyTitle(data)
+        && data.location is string
+        && data.location.size() > 0
+        && data.areaSqFt is number
+        && data.areaSqFt > 0
+        && data.price is number
+        && data.price > 0
+        && data.images is list
+        && data.images.size() > 0
+        && data.approval is string
+        && data.approval.matches('.*([Aa]pproved|[Vv]erified|[Rr]egistered).*');
+    }
+    function hasValidPropertyStatus(data) {
+      return data.status in ['draft', 'published', 'sold_out']
+        && (data.status != 'published' || (data.published == true && data.isSoldOut == false))
+        && (data.status != 'draft' || (data.published == false && data.isSoldOut == false))
+        && (data.status != 'sold_out' || (data.published == true && data.isSoldOut == true && data.soldOutAt != null));
+    }
+    function hasValidLandownerSubmission(data) {
+      return data.status == 'pending'
+        && data.reviewStatus == 'pending'
+        && data.consentToContact == true
+        && data.title is string
+        && data.title.size() >= 12
+        && data.title.size() <= 100
+        && data.title.matches('.* .*')
+        && data.sellerName is string
+        && data.sellerName.size() > 0
+        && data.sellerName.size() <= 100
+        && data.sellerPhone is string
+        && data.sellerPhone.matches('^[6-9][0-9]{9}$')
+        && data.location is string
+        && data.location.size() > 0
+        && data.location.size() <= 160
+        && data.areaSqFt is number
+        && data.areaSqFt > 0
+        && data.expectedPrice is number
+        && data.expectedPrice > 0
+        && data.description is string
+        && data.description.size() > 0
+        && data.description.size() <= 2500
+        && data.images is list
+        && data.images.size() <= 6;
+    }
+    function hasValidBuyerEnquiry(data) {
+      return data.status == 'new'
+        && !data.keys().hasAny(['preferredDate', 'preferredTime', 'visitDate', 'visitTime'])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 100
+        && data.phone is string
+        && data.phone.matches('^(91)?[6-9][0-9]{9}$')
+        && data.propertyId is string
+        && data.propertyId.size() > 0
+        && data.propertyId.size() <= 160
+        && data.message is string
+        && data.message.size() > 0
+        && data.message.size() <= 1000
+        && (!('address' in data)
+          || data.address == null
+          || (data.address is string && data.address.size() <= 300));
+    }
+    function hasValidContactMessage(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 100
+        && data.email is string
+        && data.email.size() > 0
+        && data.email.matches('^.+@.+\\..+$')
+        && data.message is string
+        && data.message.size() > 0
+        && data.message.size() <= 2000;
     }
 
-    match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) &&
-        request.resource.data.uid == userId &&
-        request.resource.data.name is string &&
-        request.resource.data.name.size() <= 100 &&
-        request.resource.data.email is string &&
-        request.resource.data.email.size() <= 254 &&
-        (!('role' in request.resource.data) || request.resource.data.role in ['buyer', 'seller']) &&
-        (!('role' in request.resource.data) || request.resource.data.role != 'admin');
-      allow update: if (isOwner(userId) && request.resource.data.uid == userId &&
-        (!('role' in request.resource.data) || request.resource.data.role != 'admin')) || isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /inquiries/{inquiryId} {
-      allow create: if request.resource.data.keys().hasAll(['propertyId', 'customerName', 'customerPhone']) &&
-        request.resource.data.propertyId is string &&
-        request.resource.data.propertyId.trim().size() > 0 &&
-        request.resource.data.customerName is string &&
-        request.resource.data.customerName.trim().size() >= 1 &&
-        request.resource.data.customerName.size() <= 100 &&
-        request.resource.data.customerPhone is string &&
-        isPhoneNumber(request.resource.data.customerPhone) &&
-        (!('customerEmail' in request.resource.data) || isValidEmail(request.resource.data.customerEmail)) &&
-        (!('message' in request.resource.data) || (request.resource.data.message is string && request.resource.data.message.size() <= 2000)) &&
-        (!('status' in request.resource.data) || request.resource.data.status == 'new') &&
-        (!('preferredDate' in request.resource.data) || request.resource.data.preferredDate is string) &&
-        (!('preferredTime' in request.resource.data) || request.resource.data.preferredTime is string) &&
-        (!('transport' in request.resource.data) || request.resource.data.transport in ['self', 'shuttle']);
-      allow read: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /favorites/{favoriteId} {
-      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
-      allow create: if isSignedIn() &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.propertyId is string &&
-        request.resource.data.propertyId.size() > 0;
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow update: if false;
-    }
-
-    match /sellerSubmissions/{submissionId} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.sellerId == request.auth.uid);
-      allow create: if isSignedIn() &&
-        request.resource.data.sellerId == request.auth.uid &&
-        request.resource.data.title is string &&
-        request.resource.data.title.trim().size() > 0 &&
-        request.resource.data.title.size() <= 200 &&
-        request.resource.data.location is string &&
-        request.resource.data.location.size() > 0 &&
-        request.resource.data.areaSqFt is number &&
-        request.resource.data.areaSqFt > 0 &&
-        (!('status' in request.resource.data) || request.resource.data.status == 'pending') &&
-        (!('sellerPhone' in request.resource.data) || isPhoneNumber(request.resource.data.sellerPhone));
-      allow update: if isAdmin() || (
-        isSignedIn() &&
-        resource.data.sellerId == request.auth.uid &&
-        request.resource.data.sellerId == request.auth.uid &&
-        request.resource.data.status in ['pending', 'needs_revision', 'rejected']
+    // Public listing: only published properties are visible
+    match /properties/{id} {
+      allow read: if resource.data.published == true || canReadAdminData();
+      allow create: if canManageListings() && hasValidPropertyStatus(request.resource.data) && (
+        (request.resource.data.published != true && hasValidPropertyTitle(request.resource.data))
+        || isPublishableProperty(request.resource.data)
       );
-      allow delete: if isAdmin() || (isSignedIn() && resource.data.sellerId == request.auth.uid);
+      allow update: if canManageListings() && hasValidPropertyStatus(request.resource.data) && (
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['title'])
+          || hasValidPropertyTitle(request.resource.data))
+        && (request.resource.data.published != true
+          || resource.data.published == true
+          || isPublishableProperty(request.resource.data))
+      );
+      allow delete: if canManageListings();
     }
 
-    match /contactMessages/{messageId} {
-      allow create: if request.resource.data.keys().hasAll(['name', 'message']) &&
-        request.resource.data.name is string &&
-        request.resource.data.name.trim().size() > 0 &&
-        request.resource.data.name.size() <= 100 &&
-        request.resource.data.message is string &&
-        request.resource.data.message.trim().size() > 0 &&
-        request.resource.data.message.size() <= 3000 &&
-        (!('email' in request.resource.data) || isValidEmail(request.resource.data.email)) &&
-        (!('status' in request.resource.data) || request.resource.data.status == 'new');
+    // Landowner submissions: anyone can submit pending, only admin reviews
+    match /landowner_submissions/{id} {
+      allow create: if hasValidLandownerSubmission(request.resource.data);
+      allow read: if canManageLeads();
+      allow update, delete: if canManageLeads();
+    }
+    match /sellerSubmissions/{id} {
+      allow create: if hasValidLandownerSubmission(request.resource.data);
+      allow read, update, delete: if canManageLeads();
+    }
+
+    // Buyer enquiries and contact form
+    match /buyer_enquiries/{id} {
+      allow create: if hasValidBuyerEnquiry(request.resource.data);
+      allow read, update, delete: if canManageLeads();
+    }
+    match /inquiries/{id} {
+      allow create: if hasValidBuyerEnquiry(request.resource.data);
+      allow read: if false;
+      allow delete: if canManageLeads();
+      allow update: if canManageLeads()
+        && request.resource.data.status in ['new', 'contacted', 'closed']
+        && !request.resource.data.keys().hasAny(['preferredDate', 'preferredTime', 'visitDate', 'visitTime']);
+    }
+    match /contactMessages/{id} {
+      allow create: if hasValidContactMessage(request.resource.data);
+      allow read: if false;
+      allow update, delete: if isAdmin();
+    }
+
+    // Public content & CMS
+    match /locations/{id} {
+      allow read: if resource.data.active == true || canReadAdminData();
+      allow write: if canManageListings();
+    }
+    match /insights/{id} {
+      allow read: if resource.data.published == true || canReadAdminData();
+      allow write: if canManageListings();
+    }
+    match /settings/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    match /siteSettings/{id} {
+      allow read: if true;
+      allow create: if id == 'site' && canManageListings() && request.resource.data.keys().hasOnly([
+        'companyName', 'logoUrl', 'tagline', 'primaryColor', 'phone', 'workingHours',
+        'trustLine', 'trustBadge', 'badgeText', 'contactPhone', 'hours', 'updatedAt'
+      ]);
+      allow update: if id == 'site' && canManageListings() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'companyName', 'logoUrl', 'tagline', 'primaryColor', 'phone', 'workingHours',
+        'trustLine', 'trustBadge', 'badgeText', 'contactPhone', 'hours', 'updatedAt'
+      ]);
+    }
+    match /website_content/{id} {
+      allow read: if true;
+      allow write: if canManageListings();
+    }
+    match /websiteContent/{id} {
+      allow read: if true;
+      allow write: if canManageListings();
+    }
+
+    // Admin audit trail
+    match /adminLogs/{id} {
       allow read: if isAdmin();
-      allow update: if isAdmin();
+      allow create: if false;
+      allow update, delete: if false;
+    }
+
+    // A user can read and edit their own profile, but never the role unless admin
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == uid
+                    && !('role' in request.resource.data);
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (request.auth.uid == uid && !('role' in request.resource.data.diff(resource.data).affectedKeys()))
+      );
       allow delete: if isAdmin();
     }
 
-    match /locations/{locationId} {
-      allow read: if true || isAdmin();
-      allow create, update, delete: if isAdmin();
+    // A user can only touch their own favorites
+    match /favorites/{id} {
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
-    match /insights/{insightId} {
-      allow read: if resource.data.published == true || isAdmin();
-      allow create, update, delete: if isAdmin();
+    // Admin registry: written only by the Admin SDK
+    match /admins/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
     }
 
-    match /adminLogs/{logId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
+    // Default deny all other unspecified collections and paths
     match /{document=**} {
       allow read, write: if false;
     }

@@ -1,242 +1,240 @@
-import React, { useState } from 'react';
-import { Search, MapPin, Building, IndianRupee, Sparkles, ShieldCheck, ArrowRight, Check, Compass, Layers } from 'lucide-react';
-import { CHENNAI_AREAS, PROPERTY_TYPES, BUDGET_RANGES } from '../data/plotsData';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Search, MapPin, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
+import { db } from '../firebase.js';
 
-export default function LevitatingHero({ 
-  searchKeyword, 
-  setSearchKeyword, 
-  selectedArea, 
-  setSelectedArea, 
-  selectedType, 
-  setSelectedType, 
-  selectedBudget, 
-  setSelectedBudget,
-  onPerformSearch 
+const DEFAULT_AREAS = [{ id: 'all', name: 'All Regions' }];
+const DEFAULT_TYPES = ['All Types'];
+const DEFAULT_CONTENT = {
+  heroTitle: 'Find Verified Plots and Land with Prime Housing',
+  heroSubtitle: 'Discover premium land opportunities with clear guidance, verified documentation, and trusted local expertise.',
+  trustLine: '',
+  heroPills: [],
+};
+
+export default function LevitatingHero({
+  searchKeyword,
+  setSearchKeyword,
+  selectedArea,
+  setSelectedArea,
+  selectedType,
+  setSelectedType,
+  onPerformSearch,
 }) {
-  const [activeTab, setActiveTab] = useState('buy');
+  const [areaOptions, setAreaOptions] = useState(DEFAULT_AREAS);
+  const [typeOptions, setTypeOptions] = useState(DEFAULT_TYPES);
+  const [heroBackground, setHeroBackground] = useState(false);
+  const [content, setContent] = useState(DEFAULT_CONTENT);
 
-  const popularChips = [
-    { label: 'OMR IT Corridor', area: 'OMR' },
-    { label: 'ECR Beachside', area: 'ECR' },
-    { label: 'Siruseri SIPCOT', area: 'Siruseri' },
-    { label: 'Navalur Hub', area: 'Navalur' },
-    { label: 'Tambaram GST', area: 'Tambaram' }
-  ];
+  useEffect(() => {
+    const image = new Image();
+    image.src = '/hero-bg.jpg';
+    image.onload = () => setHeroBackground(true);
+    image.onerror = () => setHeroBackground(false);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadFilterOptions = async () => {
+      try {
+        const snap = await getDocs(query(collection(db, 'locations'), where('active', '==', true)));
+        const items = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+
+        const areas = items
+          .filter((item) => !item.type || item.type === 'location')
+          .map((item) => ({ id: String(item.name || item.id), name: item.name || item.id }))
+          .filter((item) => item.name)
+          .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
+
+        const categories = items
+          .filter((item) => item.type === 'category')
+          .map((item) => item.name || item.id)
+          .filter(Boolean)
+          .filter((item, index, arr) => arr.indexOf(item) === index);
+
+        if (!active) return;
+
+        setAreaOptions(
+          [{ id: 'all', name: 'All Regions' }, ...areas.map((area) => ({ ...area, name: area.name }))]
+        );
+        setTypeOptions(categories.length ? ['All Types', ...categories] : ['All Types']);
+      } catch (error) {
+        console.error('Failed to load filter metadata from locations:', error);
+      }
+    };
+
+    const loadContent = async () => {
+      try {
+        const refs = [
+          doc(db, 'siteSettings', 'site'),
+          doc(db, 'siteContent', 'site'),
+          doc(db, 'websiteContent', 'site'),
+        ];
+
+        const snapshots = await Promise.allSettled(refs.map((ref) => getDoc(ref)));
+        const merged = { ...DEFAULT_CONTENT };
+
+        snapshots.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value?.exists()) {
+            Object.assign(merged, result.value.data());
+          }
+        });
+
+        if (!active) return;
+
+        setContent({
+          ...DEFAULT_CONTENT,
+          ...merged,
+          heroTitle: merged.heroTitle || merged.heroHeadline || DEFAULT_CONTENT.heroTitle,
+          heroSubtitle: merged.heroSubtitle || merged.heroDescription || merged.tagline || DEFAULT_CONTENT.heroSubtitle,
+          trustLine: merged.trustLine || merged.trustBadge || merged.badgeText || '',
+          heroPills: Array.isArray(merged.heroPills) ? merged.heroPills.filter(Boolean).slice(0, 3) : [],
+        });
+      } catch (error) {
+        console.warn('[LevitatingHero] Could not load content metadata:', error);
+      }
+    };
+
+    loadFilterOptions();
+    loadContent();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const heroPills = useMemo(
+    () => (Array.isArray(content.heroPills) ? content.heroPills.filter(Boolean).slice(0, 3) : []),
+    [content.heroPills]
+  );
 
   return (
-    <section className="relative pt-6 pb-16 lg:pt-12 lg:pb-24 overflow-hidden">
-      
-      {/* Background Antigravity Floating Gradient Orbs */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full pointer-events-none -z-10">
-        <div className="absolute top-10 left-10 w-96 h-96 rounded-full bg-emerald-300/20 blur-3xl animate-orb-spin"></div>
-        <div className="absolute top-32 right-12 w-80 h-80 rounded-full bg-teal-200/25 blur-3xl animate-pulse-glow"></div>
-        <div className="absolute -bottom-10 left-1/3 w-72 h-72 rounded-full bg-emerald-400/15 blur-2xl"></div>
-      </div>
+    <section className="relative overflow-hidden border-b border-[#234533] bg-[#102319] py-16 text-white md:py-24">
+      {heroBackground ? (
+        <>
+          <img
+            src="/hero-bg.jpg"
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-25 mix-blend-luminosity"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0c1a13] via-[#102319]/90 to-transparent" />
+        </>
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0c1a13] via-[#102319] to-[#17372b]" />
+      )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        {/* Antigravity floating headline section */}
-        <div className="text-center max-w-4xl mx-auto space-y-4 mb-8 lg:mb-12">
-          
-          {/* Top Pill Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-900/10 border border-[#1B4D3E]/20 backdrop-blur-md shadow-sm animate-float-gentle">
-            <span className="w-2 h-2 rounded-full bg-[#1B4D3E] animate-ping"></span>
-            <span className="text-xs font-extrabold text-[#1B4D3E] tracking-wider uppercase">
-              CHENNAI REAL ESTATE PORTAL 2026
-            </span>
-            <ShieldCheck className="w-4 h-4 text-[#1B4D3E]" />
-          </div>
+      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="max-w-3xl space-y-5 pt-2 md:pt-4">
+          {content.trustLine ? (
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#52b788]/40 bg-[#1e4230] px-3 py-1.5 text-[11px] font-semibold text-[#74c69d]">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span>{content.trustLine}</span>
+            </div>
+          ) : null}
 
-          {/* Main Title - One UI Focus Header Style */}
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-[#111827] tracking-tight leading-[1.12]">
-            Discover Floating <span className="bg-gradient-to-r from-[#1B4D3E] via-emerald-700 to-[#1B4D3E] bg-clip-text text-transparent">Verified Plots</span> in Chennai
+          <h1 className="max-w-3xl font-serif text-3xl font-bold leading-[1.15] tracking-tight text-white sm:text-5xl lg:text-6xl">
+            {content.heroTitle}
           </h1>
 
-          <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto font-medium leading-relaxed">
-            CMDA & DTCP cleared land with guaranteed clear titles across OMR, ECR, Siruseri, Navalur, and booming growth hubs.
+          <p className="max-w-2xl text-base font-light leading-relaxed text-neutral-300 sm:text-lg">
+            {content.heroSubtitle}
           </p>
 
-          {/* Tab Selector Pill (Buy / Investment / Gated Layouts) */}
-          <div className="inline-flex p-1 rounded-full bg-white/80 border border-slate-200 backdrop-blur-md shadow-sm">
-            <button
-              onClick={() => setActiveTab('buy')}
-              className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${
-                activeTab === 'buy'
-                  ? 'bg-[#1B4D3E] text-white shadow-md shadow-[#1B4D3E]/20'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Buy Residential Plots
-            </button>
-            <button
-              onClick={() => setActiveTab('villa')}
-              className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${
-                activeTab === 'villa'
-                  ? 'bg-[#1B4D3E] text-white shadow-md shadow-[#1B4D3E]/20'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Villa Communities
-            </button>
-            <button
-              onClick={() => setActiveTab('commercial')}
-              className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${
-                activeTab === 'commercial'
-                  ? 'bg-[#1B4D3E] text-white shadow-md shadow-[#1B4D3E]/20'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Commercial & Farm Land
-            </button>
-          </div>
-
-        </div>
-
-        {/* Levitating Hero Search Bar Container */}
-        <div className="relative max-w-5xl mx-auto">
-
-          {/* Floating Accents / Badges around Search Bar */}
-          <div className="hidden lg:flex absolute -left-12 -top-8 items-center gap-2 px-3.5 py-2 rounded-2xl bg-white/90 backdrop-blur-xl border border-white/60 shadow-xl shadow-emerald-950/10 text-xs font-bold text-[#1B4D3E] animate-float-slow">
-            <div className="w-7 h-7 rounded-xl bg-emerald-100 flex items-center justify-center text-[#1B4D3E]">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="font-extrabold leading-none text-[#111827]">CMDA Approved</p>
-              <p className="text-[10px] text-slate-500 font-normal">100% Legal Check</p>
-            </div>
-          </div>
-
-          <div className="hidden lg:flex absolute -right-10 -bottom-6 items-center gap-2 px-3.5 py-2 rounded-2xl bg-white/90 backdrop-blur-xl border border-white/60 shadow-xl shadow-emerald-950/10 text-xs font-bold text-slate-800 animate-float-reverse">
-            <div className="w-7 h-7 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="font-extrabold leading-none text-[#111827]">14.8% YoY ROI</p>
-              <p className="text-[10px] text-slate-500 font-normal">Chennai High Growth</p>
-            </div>
-          </div>
-
-          {/* Levitating Pill Search Box */}
-          <div className="bg-white/90 backdrop-blur-2xl p-3 sm:p-4 rounded-[2.5rem] border border-white/80 shadow-2xl shadow-emerald-950/12 transition-all duration-300 hover:shadow-emerald-950/20">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 sm:gap-3 items-center">
-              
-              {/* Keyword / Locality Search */}
-              <div className="md:col-span-4 bg-slate-50/90 hover:bg-white p-3.5 rounded-2xl border border-slate-200/80 transition-all group focus-within:border-[#1B4D3E] focus-within:ring-2 focus-within:ring-[#1B4D3E]/20">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
-                  Location / Keyword
-                </label>
-                <div className="flex items-center gap-2">
-                  <Search className="w-4 h-4 text-slate-400 group-focus-within:text-[#1B4D3E] transition-colors" />
-                  <input
-                    type="text"
-                    placeholder="Search OMR, ECR, Siruseri..."
-                    value={searchKeyword}
-                    onChange={(e) => setSearchKeyword(e.target.value)}
-                    className="w-full bg-transparent text-xs sm:text-sm font-bold text-[#111827] placeholder-slate-400 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Area Segmented Dropdown */}
-              <div className="md:col-span-3 bg-slate-50/90 hover:bg-white p-3.5 rounded-2xl border border-slate-200/80 transition-all focus-within:border-[#1B4D3E]">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
-                  Chennai Area
-                </label>
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-[#1B4D3E]" />
-                  <select
-                    value={selectedArea}
-                    onChange={(e) => setSelectedArea(e.target.value)}
-                    className="w-full bg-transparent text-xs sm:text-sm font-bold text-[#111827] focus:outline-none cursor-pointer"
-                  >
-                    {CHENNAI_AREAS.map((area) => (
-                      <option key={area.id} value={area.id}>
-                        {area.name} {area.count ? `(${area.count})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Property Type Dropdown */}
-              <div className="md:col-span-2 bg-slate-50/90 hover:bg-white p-3.5 rounded-2xl border border-slate-200/80 transition-all focus-within:border-[#1B4D3E]">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
-                  Plot Type
-                </label>
-                <div className="flex items-center gap-2">
-                  <Building className="w-4 h-4 text-slate-400" />
-                  <select
-                    value={selectedType}
-                    onChange={(e) => setSelectedType(e.target.value)}
-                    className="w-full bg-transparent text-xs sm:text-sm font-bold text-[#111827] focus:outline-none cursor-pointer"
-                  >
-                    {PROPERTY_TYPES.map((type) => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Budget Dropdown */}
-              <div className="md:col-span-3 lg:col-span-3 flex items-center gap-2">
-                <div className="w-full bg-slate-50/90 hover:bg-white p-3.5 rounded-2xl border border-slate-200/80 transition-all focus-within:border-[#1B4D3E]">
-                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
-                    Max Budget
-                  </label>
-                  <div className="flex items-center gap-1.5">
-                    <IndianRupee className="w-3.5 h-3.5 text-emerald-700" />
-                    <select
-                      value={selectedBudget}
-                      onChange={(e) => setSelectedBudget(e.target.value)}
-                      className="w-full bg-transparent text-xs sm:text-sm font-bold text-[#111827] focus:outline-none cursor-pointer"
-                    >
-                      {BUDGET_RANGES.map((b, idx) => (
-                        <option key={idx} value={idx}>{b.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Interactive Search Properties Action Button */}
-                <button
-                  type="button"
-                  onClick={onPerformSearch}
-                  className="h-[54px] px-6 rounded-2xl bg-[#1B4D3E] hover:bg-[#143B30] active:scale-95 text-white font-extrabold text-sm shadow-xl shadow-[#1B4D3E]/30 flex items-center justify-center gap-2 shrink-0 transition-all duration-200 group cursor-pointer"
+          {heroPills.length > 0 ? (
+            <div className="flex flex-wrap gap-3 pt-1">
+              {heroPills.map((pill, index) => (
+                <span
+                  key={`${pill}-${index}`}
+                  className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/40 px-3 py-1.5 text-[11px] text-neutral-300"
                 >
-                  <Search className="w-5 h-5 text-emerald-300 group-hover:rotate-12 transition-transform" />
-                  <span className="hidden sm:inline">Search</span>
-                </button>
-              </div>
-
+                  <CheckCircle2 className="h-3.5 w-3.5 text-[#52b788]" />
+                  {pill}
+                </span>
+              ))}
             </div>
-          </div>
-
-          {/* Quick Hotspot Chips */}
-          <div className="mt-4 flex items-center justify-center flex-wrap gap-2 text-xs">
-            <span className="text-slate-500 font-semibold flex items-center gap-1">
-              <Compass className="w-3.5 h-3.5 text-[#1B4D3E]" /> Popular Chennai Corridors:
-            </span>
-            {popularChips.map((chip, idx) => (
-              <button
-                key={idx}
-                onClick={() => {
-                  setSelectedArea(chip.area);
-                  onPerformSearch();
-                }}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
-                  selectedArea === chip.area
-                    ? 'bg-[#1B4D3E] text-white border-[#1B4D3E]'
-                    : 'bg-white/80 text-slate-700 hover:bg-emerald-50 hover:text-[#1B4D3E] border-slate-200'
-                }`}
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
-
+          ) : null}
         </div>
 
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            onPerformSearch?.();
+          }}
+          className="mt-10 max-w-4xl rounded-2xl border border-white/20 bg-white p-4 text-neutral-900 shadow-2xl shadow-[#0c1a13]/40 sm:p-5"
+        >
+          <div className="grid gap-3 md:grid-cols-12 md:items-end">
+            <div className="md:col-span-3">
+              <label htmlFor="hero-location" className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">
+                Location / Region
+              </label>
+              <div className="flex items-center gap-2 rounded-lg border border-[#cfd7d2] bg-[#f9faf9] px-3 py-2.5 focus-within:border-[#2d6a4f] focus-within:ring-2 focus-within:ring-[#2d6a4f]/20">
+                <MapPin className="h-4 w-4 text-[#2d6a4f]" />
+                <select
+                  id="hero-location"
+                  value={selectedArea}
+                  onChange={(event) => setSelectedArea(event.target.value)}
+                  className="w-full border-0 bg-transparent py-1 text-sm text-neutral-800 outline-none"
+                >
+                  {areaOptions.map((area) => (
+                    <option key={area.id} value={area.id} className="text-neutral-900">
+                      {area.name === 'All Locations' ? 'All Regions' : area.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="md:col-span-3">
+              <label htmlFor="hero-type" className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">
+                Property Classification
+              </label>
+              <div className="rounded-lg border border-[#cfd7d2] bg-[#f9faf9] px-3 py-2.5 focus-within:border-[#2d6a4f] focus-within:ring-2 focus-within:ring-[#2d6a4f]/20">
+                <select
+                  id="hero-type"
+                  value={selectedType}
+                  onChange={(event) => setSelectedType(event.target.value)}
+                  className="w-full border-0 bg-transparent py-1 text-sm text-neutral-800 outline-none"
+                >
+                  {typeOptions.map((type) => (
+                    <option key={type} value={type} className="text-neutral-900">
+                      {type === 'All Types' ? 'All Categories' : type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="md:col-span-4">
+              <label htmlFor="hero-keyword" className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">
+                Keywords or Title
+              </label>
+              <div className="flex items-center gap-2 rounded-lg border border-[#cfd7d2] bg-[#f9faf9] px-3 py-2.5 focus-within:border-[#2d6a4f] focus-within:ring-2 focus-within:ring-[#2d6a4f]/20">
+                <Search className="h-4 w-4 text-[#2d6a4f]" />
+                <input
+                  id="hero-keyword"
+                  type="text"
+                  value={searchKeyword}
+                  onChange={(event) => setSearchKeyword(event.target.value)}
+                  placeholder="Search by title or keyword"
+                  className="w-full border-0 bg-transparent py-1 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#2d6a4f] px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-white transition hover:bg-[#1b4332] focus:outline-none focus:ring-2 focus:ring-[#2d6a4f]/30"
+              >
+                <Search className="h-4 w-4" />
+                Search
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
     </section>
   );
 }
+

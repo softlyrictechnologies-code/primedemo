@@ -4,8 +4,6 @@ import {
   doc,
   updateDoc,
   deleteDoc,
-  query,
-  orderBy,
   serverTimestamp,
   arrayUnion,
 } from 'firebase/firestore';
@@ -13,20 +11,31 @@ import { db, auth } from '../../firebase.js';
 import { INQUIRIES_COLLECTION } from '../../services/inquiryService.js';
 import { logAdminAction } from './adminLogService.js';
 
+export const BUYER_ENQUIRIES_COLLECTION = INQUIRIES_COLLECTION;
+
 /**
- * Fetch all customer site-visit inquiries
+ * Fetch all buyer enquiries (supports both inquiries and buyer_enquiries)
  */
 export async function getAllInquiries() {
   try {
-    const inquiriesRef = collection(db, INQUIRIES_COLLECTION);
-    const snap = await getDocs(inquiriesRef);
-
     const inquiries = [];
-    snap.forEach((docSnap) => {
-      inquiries.push({
-        id: docSnap.id,
-        ...docSnap.data(),
-      });
+    const seenIds = new Set();
+
+    const snapshot = await getDocs(collection(db, INQUIRIES_COLLECTION));
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (!seenIds.has(docSnap.id)) {
+        seenIds.add(docSnap.id);
+        inquiries.push({
+          ...data,
+          id: docSnap.id,
+          _collection: INQUIRIES_COLLECTION,
+          name: data.name || data.customerName || '',
+          phone: data.phone || data.customerPhone || '',
+          email: data.email || data.customerEmail || '',
+          propertyTitle: data.propertyTitle || '',
+        });
+      }
     });
 
     // Sort by createdAt descending
@@ -36,7 +45,7 @@ export async function getAllInquiries() {
       return timeB - timeA;
     });
   } catch (error) {
-    const message = `adminInquiryService.getAllInquiries() failed while reading the inquiries collection: ${error.message}`;
+    const message = `adminInquiryService.getAllInquiries() failed: ${error.message}`;
     console.error(`[AdminInquiryService] ${message}`, error);
     throw new Error(message);
   }
@@ -45,15 +54,28 @@ export async function getAllInquiries() {
 /**
  * Update an inquiry's workflow status
  */
-export async function updateInquiryStatus(id, newStatus, internalNote = '') {
+export async function updateInquiryStatus(id, newStatus, internalNote = '', collectionName = INQUIRIES_COLLECTION) {
   if (!id) throw new Error('Inquiry ID is required.');
 
   try {
     const currentUser = auth.currentUser;
-    const docRef = doc(db, INQUIRIES_COLLECTION, id);
+    const targetColl = collectionName || INQUIRIES_COLLECTION;
+    const docRef = doc(db, targetColl, id);
+
+    const normalizedStatus = String(newStatus).toLowerCase().trim();
+    const validStatuses = [
+      'new',
+      'contacted',
+      'contacted',
+      'new',
+      'closed',
+    ];
+    if (!validStatuses.includes(normalizedStatus)) {
+      throw new Error(`Invalid inquiry status: ${newStatus}.`);
+    }
 
     const updatePayload = {
-      status: newStatus,
+      status: normalizedStatus,
       updatedAt: serverTimestamp(),
     };
 

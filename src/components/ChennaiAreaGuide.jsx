@@ -1,126 +1,50 @@
-import React from 'react';
-import { TrendingUp, MapPin, Building2, Train, Waves, ShieldCheck, ArrowRight } from 'lucide-react';
-import { CHENNAI_AREAS } from '../data/plotsData';
+import React, { useEffect, useState } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { ArrowRight, Building2, TrendingUp } from 'lucide-react';
+import { db } from '../firebase.js';
 
 export default function ChennaiAreaGuide({ onSelectArea }) {
-  const guides = [
-    {
-      id: 'OMR',
-      title: 'OMR IT Expressway',
-      tagline: 'The Tech & Employment Engine of Chennai',
-      avgPrice: '₹4,850 / sqft',
-      growth: '+14.5% YoY',
-      icon: Building2,
-      highlights: ['CMRL Metro Line 3 Corridor', 'TCS, Cognizant, Infosys Campuses', 'High Rental Demand'],
-      bgGradient: 'from-emerald-900 to-slate-900'
-    },
-    {
-      id: 'ECR',
-      title: 'ECR Coastal Belt',
-      tagline: 'Luxury Beachside Enclaves & Gated Estates',
-      avgPrice: '₹7,200 / sqft',
-      growth: '+18.2% YoY',
-      icon: Waves,
-      highlights: ['100m Beach Access', 'Fine Dining & Clubs', 'ECR 6-Lane Expressway Extension'],
-      bgGradient: 'from-teal-950 to-slate-900'
-    },
-    {
-      id: 'Siruseri',
-      title: 'Siruseri SIPCOT Hub',
-      tagline: 'Asia’s Largest IT Park Zone for High Growth',
-      avgPrice: '₹4,200 / sqft',
-      growth: '+13.8% YoY',
-      icon: Train,
-      highlights: ['SIPCOT Tech Park Expansion', 'Proposed Metro Terminal', 'Top Schools & Universities'],
-      bgGradient: 'from-emerald-950 to-emerald-900'
-    }
-  ];
+  const [locations, setLocations] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    getDocs(query(collection(db, 'locations'), where('active', '==', true)))
+      .then((snapshot) => {
+        if (active) setLocations(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+      })
+      .catch((error) => console.error('Could not load active location guides:', error));
+    return () => { active = false; };
+  }, []);
+
+  if (!locations.length) return null;
 
   return (
-    <section className="py-12 bg-white/60 backdrop-blur-md rounded-[3rem] border border-white/80 my-12 p-6 sm:p-10 shadow-xl shadow-slate-200/40">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <span className="px-3 py-1 rounded-full bg-emerald-100 text-[#1B4D3E] text-xs font-bold uppercase tracking-wider">
-              HOTSPOT ANALYSIS 2026
-            </span>
-            <h2 className="text-2xl sm:text-4xl font-black text-[#111827] mt-2 tracking-tight">
-              Chennai High-Growth Corridors
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-              Data-backed appreciation metrics & infrastructure developments in key zones.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (onSelectArea) onSelectArea('all');
-              const el = document.getElementById('plots-results-section');
-              if (el) el.scrollIntoView({ behavior: 'smooth' });
-            }}
-            className="px-5 py-2.5 rounded-full bg-[#1B4D3E] hover:bg-[#143B30] text-white text-xs font-bold shadow-md flex items-center gap-2 self-start sm:self-auto cursor-pointer"
-          >
-            <span>Explore All Locations</span>
-            <ArrowRight className="w-4 h-4 text-emerald-300" />
-          </button>
+    <section className="my-12 rounded-[3rem] border border-white/80 bg-white/60 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-md sm:p-10">
+      <div className="mx-auto max-w-7xl space-y-8">
+        <div>
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#1B4D3E]">Location Guides</span>
+          <h2 className="mt-2 text-2xl font-black tracking-tight text-[#111827] sm:text-4xl">Explore Chennai locations</h2>
+          <p className="mt-1 text-xs font-medium text-slate-500 sm:text-sm">Area details and pricing maintained by the Prime Housing team.</p>
         </div>
-
-        {/* Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {guides.map((item) => {
-            const IconComponent = item.icon;
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          {locations.map((item) => {
+            const highlights = Array.isArray(item.highlights) ? item.highlights : String(item.highlights || '').split(',').map((value) => value.trim()).filter(Boolean);
             return (
-              <div
-                key={item.id}
-                onClick={() => onSelectArea(item.id)}
-                className="group cursor-pointer rounded-[2rem] p-6 bg-gradient-to-br from-white to-slate-50 border border-slate-200/80 shadow-lg hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col justify-between"
-              >
+              <button key={item.id} type="button" onClick={() => onSelectArea?.(item.name || item.id)} className="flex flex-col justify-between rounded-[2rem] border border-slate-200/80 bg-gradient-to-br from-white to-slate-50 p-6 text-left shadow-lg transition hover:-translate-y-1 hover:shadow-xl">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="w-12 h-12 rounded-2xl bg-[#1B4D3E] text-emerald-300 flex items-center justify-center shadow-md">
-                      <IconComponent className="w-6 h-6" />
-                    </div>
-                    <span className="px-3 py-1 rounded-full bg-emerald-50 text-[#1B4D3E] text-xs font-bold border border-emerald-200">
-                      {item.growth}
-                    </span>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#1B4D3E] text-emerald-300"><Building2 className="h-6 w-6" /></span>
+                    {item.appreciationRate && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-[#1B4D3E]">{item.appreciationRate}</span>}
                   </div>
-
-                  <div>
-                    <h3 className="text-xl font-black text-[#111827] group-hover:text-[#1B4D3E] transition-colors">
-                      {item.title}
-                    </h3>
-                    <p className="text-xs text-slate-500 font-medium mt-1">
-                      {item.tagline}
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-white border border-slate-100 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase">Avg Sq.Ft Rate</span>
-                    <span className="text-sm font-extrabold text-[#1B4D3E]">{item.avgPrice}</span>
-                  </div>
-
-                  <ul className="space-y-1.5 text-xs text-slate-600">
-                    {item.highlights.map((h, idx) => (
-                      <li key={idx} className="flex items-center gap-2">
-                        <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>{h}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div><h3 className="text-xl font-black text-[#111827]">{item.name}</h3><p className="mt-1 text-xs font-medium text-slate-500">{item.description}</p></div>
+                  {item.avgPriceSqft != null && <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-3"><span className="text-[11px] font-bold uppercase text-slate-400">Avg Sq.Ft Rate</span><span className="text-sm font-extrabold text-[#1B4D3E]">₹{Number(item.avgPriceSqft).toLocaleString('en-IN')}</span></div>}
+                  {highlights.length > 0 && <ul className="space-y-1.5 text-xs text-slate-600">{highlights.map((highlight, index) => <li key={`${item.id}-${index}`} className="flex items-center gap-2"><TrendingUp className="h-3.5 w-3.5 shrink-0 text-emerald-600" /><span>{highlight}</span></li>)}</ul>}
                 </div>
-
-                <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-[#1B4D3E] group-hover:underline">
-                  <span>View Verified Plots in {item.id}</span>
-                  <ArrowRight className="w-4 h-4 text-[#1B4D3E] group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
+                <span className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 text-xs font-bold text-[#1B4D3E]">View listings in {item.name}<ArrowRight className="h-4 w-4" /></span>
+              </button>
             );
           })}
         </div>
-
       </div>
     </section>
   );

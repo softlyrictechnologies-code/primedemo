@@ -8,8 +8,10 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "seed": "node scripts/seed-firestore.cjs",
     "setup:firestore": "node --max-old-space-size=2048 scripts/setup-firestore.js",
-    "check:firebase": "node scripts/check-firebase.js"
+    "check:firebase": "node scripts/check-firebase.js",
+    "verify:backend": "node scripts/verify-all.cjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

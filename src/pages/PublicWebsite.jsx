@@ -5,23 +5,20 @@ import QuickFiltersBar from '../components/QuickFiltersBar';
 import PropertyCard from '../components/PropertyCard';
 import PropertyDetailModal from '../components/PropertyDetailModal';
 import PlotComparisonDrawer from '../components/PlotComparisonDrawer';
-import ListPropertyModal from '../components/ListPropertyModal';
-import SiteVisitModal from '../components/SiteVisitModal';
 import ChennaiAreaGuide from '../components/ChennaiAreaGuide';
 import InteractiveMapModal from '../components/InteractiveMapModal';
 import Toast from '../components/Toast';
 import Footer from '../components/Footer';
 
-import { PLOTS_DATA, CHENNAI_STATS, BUDGET_RANGES } from '../data/plotsData';
+import { BUDGET_RANGES } from '../data/plotsData';
 import { getPublishedProperties } from '../services/propertyService';
-import { ShieldCheck, Sparkles, Building2, TrendingUp, Users, Compass, SlidersHorizontal, Database, Loader2, RefreshCw } from 'lucide-react';
+import { Sparkles, Building2, Compass, SlidersHorizontal, Database, Loader2, RefreshCw } from 'lucide-react';
 
 export default function PublicWebsite() {
   // Firestore Properties State
   const [properties, setProperties] = useState([]);
   const [isLoadingProperties, setIsLoadingProperties] = useState(true);
   const [loadError, setLoadError] = useState(null);
-  const [isUsingFirestore, setIsUsingFirestore] = useState(false);
 
   // Search & Filter State
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -33,13 +30,11 @@ export default function PublicWebsite() {
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'map'
 
   // User Interactivity States
-  const [savedPlotIds, setSavedPlotIds] = useState(new Set(['plot-1', 'plot-2']));
-  const [comparedPlotIds, setComparedPlotIds] = useState(['plot-1', 'plot-2']);
+  const [savedPlotIds, setSavedPlotIds] = useState(new Set());
+  const [comparedPlotIds, setComparedPlotIds] = useState([]);
   
   // Modals & Drawers
   const [selectedPlotForModal, setSelectedPlotForModal] = useState(null);
-  const [selectedPlotForVisit, setSelectedPlotForVisit] = useState(null);
-  const [isListModalOpen, setIsListModalOpen] = useState(false);
   const [isComparisonDrawerOpen, setIsComparisonDrawerOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -48,18 +43,11 @@ export default function PublicWebsite() {
     setLoadError(null);
     try {
       const data = await getPublishedProperties();
-      if (Array.isArray(data) && data.length > 0) {
-        setProperties(data);
-        setIsUsingFirestore(true);
-      } else {
-        setProperties(PLOTS_DATA);
-        setIsUsingFirestore(false);
-      }
+      setProperties(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching published properties from Firestore:', err);
       setLoadError(err?.message || 'Unable to load Firestore listings.');
-      setProperties(PLOTS_DATA);
-      setIsUsingFirestore(false);
+      setProperties([]);
     } finally {
       setIsLoadingProperties(false);
     }
@@ -174,7 +162,6 @@ export default function PublicWebsite() {
       <Header
         savedCount={savedPlotIds.size}
         compareCount={comparedPlotIds.length}
-        onOpenListModal={() => setIsListModalOpen(true)}
         onOpenComparison={() => setIsComparisonDrawerOpen(true)}
       />
 
@@ -196,51 +183,6 @@ export default function PublicWebsite() {
           }}
         />
 
-        {/* Stats Counter Bar - Samsung One UI Floating Containers */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 sm:p-6 rounded-[2.5rem] bg-white/80 backdrop-blur-xl border border-white/80 shadow-xl shadow-slate-200/50">
-            <div className="p-4 rounded-3xl bg-slate-50/80 border border-slate-100/80 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-[#1B4D3E] text-white flex items-center justify-center shrink-0">
-                <ShieldCheck className="w-6 h-6 text-emerald-300" />
-              </div>
-              <div>
-                <p className="text-xl sm:text-2xl font-black text-[#111827]">{CHENNAI_STATS.verifiedPlotsCount}</p>
-                <p className="text-[11px] text-slate-500 font-semibold">CMDA & DTCP Plots</p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-3xl bg-slate-50/80 border border-slate-100/80 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-[#1B4D3E] text-white flex items-center justify-center shrink-0">
-                <Users className="w-6 h-6 text-emerald-300" />
-              </div>
-              <div>
-                <p className="text-xl sm:text-2xl font-black text-[#111827]">{CHENNAI_STATS.totalBuyers}</p>
-                <p className="text-[11px] text-slate-500 font-semibold">Happy Buyers</p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-3xl bg-slate-50/80 border border-slate-100/80 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-[#1B4D3E] text-white flex items-center justify-center shrink-0">
-                <TrendingUp className="w-6 h-6 text-emerald-300" />
-              </div>
-              <div>
-                <p className="text-xl sm:text-2xl font-black text-[#1B4D3E]">{CHENNAI_STATS.avgAppreciation}</p>
-                <p className="text-[11px] text-slate-500 font-semibold">Avg Annual Growth</p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-3xl bg-slate-50/80 border border-slate-100/80 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-[#1B4D3E] flex items-center justify-center shrink-0 font-extrabold text-xs">
-                TN
-              </div>
-              <div>
-                <p className="text-sm font-extrabold text-[#111827]">RERA TN Approved</p>
-                <p className="text-[11px] text-slate-500 font-semibold">CREDAI Member</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* Results & Listing Section */}
         <section id="plots-results-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
           
@@ -260,15 +202,15 @@ export default function PublicWebsite() {
           {/* Firebase Connection & Live Sync Indicator */}
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-white/70 backdrop-blur-md border border-slate-200/80 text-xs">
             <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isLoadingProperties ? 'bg-amber-400 animate-ping' : isUsingFirestore ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+              <span className={`w-2.5 h-2.5 rounded-full ${isLoadingProperties ? 'bg-amber-400 animate-ping' : loadError ? 'bg-rose-500' : 'bg-emerald-500'}`} />
               <span className="font-bold text-slate-800">
                 {isLoadingProperties
                   ? 'Connecting to Cloud Firestore...'
-                  : isUsingFirestore
-                  ? `Cloud Firestore Live: ${properties.length} Listings Synchronized`
-                  : `Offline Backup Mode (${properties.length} Listings)`}
+                  : loadError
+                    ? 'Could not load property listings'
+                    : `Cloud Firestore: ${properties.length} Listings`}
               </span>
-              {isUsingFirestore && (
+              {!isLoadingProperties && !loadError && (
                 <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-[#1B4D3E] font-extrabold text-[10px]">
                   Firebase Connected
                 </span>
@@ -344,7 +286,6 @@ export default function PublicWebsite() {
                       key={plot.id}
                       plot={plot}
                       onSelectPlot={(p) => setSelectedPlotForModal(p)}
-                      onScheduleVisit={(p) => setSelectedPlotForVisit(p)}
                       isSaved={savedPlotIds.has(plot.id)}
                       onToggleSave={handleToggleSave}
                       isCompared={comparedPlotIds.includes(plot.id)}
@@ -366,35 +307,14 @@ export default function PublicWebsite() {
       </main>
 
       {/* Footer */}
-      <Footer onOpenListModal={() => setIsListModalOpen(true)} />
+      <Footer />
 
       {/* Modals & Drawers */}
       {selectedPlotForModal && (
         <PropertyDetailModal
           plot={selectedPlotForModal}
           onClose={() => setSelectedPlotForModal(null)}
-          onScheduleVisit={(p) => {
-            setSelectedPlotForModal(null);
-            setSelectedPlotForVisit(p);
-          }}
           onTriggerToast={showToast}
-        />
-      )}
-
-      {selectedPlotForVisit && (
-        <SiteVisitModal
-          plot={selectedPlotForVisit}
-          onClose={() => setSelectedPlotForVisit(null)}
-          onSuccessToast={showToast}
-          onErrorToast={showToast}
-        />
-      )}
-
-      {isListModalOpen && (
-        <ListPropertyModal
-          isOpen={isListModalOpen}
-          onClose={() => setIsListModalOpen(false)}
-          onSuccessToast={showToast}
         />
       )}
 
@@ -403,10 +323,6 @@ export default function PublicWebsite() {
           comparePlots={comparedPlotsData}
           onClose={() => setIsComparisonDrawerOpen(false)}
           onRemovePlot={(id) => handleToggleCompare(id)}
-          onScheduleVisit={(p) => {
-            setIsComparisonDrawerOpen(false);
-            setSelectedPlotForVisit(p);
-          }}
         />
       )}
 

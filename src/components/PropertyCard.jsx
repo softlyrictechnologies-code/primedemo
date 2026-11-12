@@ -1,10 +1,9 @@
 import React from 'react';
-import { ShieldCheck, MapPin, Heart, ArrowUpRight, Compass, Maximize2, Layers, CheckCircle2, SlidersHorizontal, Calendar } from 'lucide-react';
+import { ShieldCheck, MapPin, Heart, ArrowUpRight, SlidersHorizontal } from 'lucide-react';
 
 export default function PropertyCard({ 
   plot, 
   onSelectPlot, 
-  onScheduleVisit, 
   isSaved, 
   onToggleSave,
   isCompared,
@@ -76,6 +75,7 @@ export default function PropertyCard({
           <span className="px-2.5 py-1 rounded-xl bg-emerald-950/80 backdrop-blur-md border border-emerald-400/30 text-[11px] font-bold text-emerald-300">
             {plot.approval}
           </span>
+          {plot.isSoldOut && <span className="absolute left-0 top-[-2.5rem] rounded-full bg-rose-700 px-3 py-1 text-[11px] font-extrabold text-white">SOLD OUT</span>}
         </div>
 
       </div>
@@ -147,14 +147,6 @@ export default function PropertyCard({
           >
             <span>View Details</span>
             <ArrowUpRight className="w-4 h-4 text-slate-500" />
-          </button>
-
-          <button
-            onClick={() => onScheduleVisit(plot)}
-            className="py-3 px-4 rounded-2xl bg-[#1B4D3E] hover:bg-[#143B30] active:scale-95 text-white font-bold text-xs shadow-md shadow-[#1B4D3E]/20 transition-all flex items-center justify-center gap-1.5"
-          >
-            <Calendar className="w-3.5 h-3.5 text-emerald-300" />
-            <span>Book Visit</span>
           </button>
 
         </div>

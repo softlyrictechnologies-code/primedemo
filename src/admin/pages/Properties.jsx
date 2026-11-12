@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Building2, 
   Plus, 
@@ -19,6 +19,8 @@ import {
   createProperty, 
   updateProperty, 
   togglePublishStatus, 
+  markPropertySoldOut,
+  restorePropertyToPublished,
   toggleFeaturedStatus, 
   deleteProperty 
 } from '../services/adminPropertyService';
@@ -32,7 +34,9 @@ import {
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
-import LoadingSpinner from '../components/LoadingSpinner';
+import Toast from '../../components/Toast';
+import AdminNotice, { useAdminNotice } from '../components/AdminNotice';
+import { validatePropertyTitle } from '../../utils/propertyValidation.js';
 
 const EMPTY_PROPERTY_FORM = {
   title: '',
@@ -44,20 +48,22 @@ const EMPTY_PROPERTY_FORM = {
   priceLakhs: 55,
   dimensions: '30 ft x 50 ft',
   facing: 'East Facing',
-  approval: 'CMDA & DTCP Approved',
-  approvalNo: 'CMDA/2026/REG',
+  approval: 'Pending Verification',
+  approvalNo: '',
   roadWidth: '30 Feet Blacktop Road',
   pattaStatus: 'Clear Ownership Patta',
   waterSource: 'Sweet Potable Ground Water',
   images: [],
-  published: true,
+  published: false,
+  verified: false,
   featured: false,
 };
 
 export default function Properties() {
+  const { notice, showNotice, clearNotice } = useAdminNotice();
   const [properties, setProperties] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('all'); // all | published | draft
+  const [filterStatus, setFilterStatus] = useState('all'); // all | published | draft | sold_out
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -73,12 +79,35 @@ export default function Properties() {
   // Delete dialog state
   const [deletingProperty, setDeletingProperty] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [statusActionProperty, setStatusActionProperty] = useState(null);
+  const [statusActionMode, setStatusActionMode] = useState('sold_out');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+  const [publishError, setPublishError] = useState(null);
+  const [saveMode, setSaveMode] = useState('save');
+  const imageUploadSectionRef = useRef(null);
+  const formRef = useRef(null);
+
+  const getHumanErrorMessage = (error) => {
+    const raw = error?.message || String(error || 'Unable to update property.');
+    if (raw.includes(':')) {
+      const lastSegment = raw.split(':').at(-1)?.trim();
+      if (lastSegment) return lastSegment;
+    }
+    return raw;
+  };
+
+  const missingImageMessage = 'Add at least one property image before publishing.';
 
   const syncFormImages = (nextImages) => {
     const normalizedUrls = nextImages.filter((img) => img.url).map((img) => img.url);
+    const normalizedPaths = nextImages.filter((img) => img.storagePath).map((img) => img.storagePath);
+
     setFormData((current) => ({
       ...current,
       images: normalizedUrls,
+      imageUrls: normalizedUrls,
+      storagePaths: normalizedPaths,
       image: normalizedUrls[0] || current.image || '',
     }));
   };
@@ -94,11 +123,15 @@ export default function Properties() {
 
   const removeImage = async (imageId) => {
     const imageToRemove = imageUploads.find((image) => image.id === imageId);
-    if (imageToRemove && !imageToRemove.isNew && imageToRemove.url && editingProperty?.id && !imageToRemove.url.startsWith('blob:')) {
-      try {
-        await deletePropertyImageByUrl(imageToRemove.url, editingProperty.id);
-      } catch (err) {
-        console.warn('[Properties] Image cleanup warning:', err.message);
+
+    if (imageToRemove && !imageToRemove.isNew && editingProperty?.id) {
+      const storagePathToDelete = imageToRemove.storagePath || imageToRemove.url;
+      if (storagePathToDelete && !imageToRemove.url?.startsWith('blob:')) {
+        try {
+          await deletePropertyImageByUrl(storagePathToDelete, editingProperty.id);
+        } catch (err) {
+          console.warn('[Properties] Image cleanup warning:', err.message);
+        }
       }
     }
 
@@ -136,6 +169,7 @@ export default function Properties() {
       url: URL.createObjectURL(file),
       fileName: file.name,
       file,
+      storagePath: null,
       isNew: true,
       isPrimary: imageUploads.length === 0 && index === 0,
       status: 'queued',
@@ -158,12 +192,12 @@ export default function Properties() {
     }
 
     setIsUploadingImages(true);
-    setUploadMessage({ type: 'info', text: 'Uploading property images to Cloudinary...' });
+    setUploadMessage({ type: 'info', text: 'Uploading property images to Firebase Storage...' });
 
     try {
       const uploaded = await Promise.all(
-        pendingUploads.map((image, index) =>
-          uploadPropertyImage(image.file, propertyId, ({ fileName, progress }) => {
+        pendingUploads.map(async (image, index) => {
+          const result = await uploadPropertyImage(image.file, propertyId, ({ fileName, progress }) => {
             setImageUploads((current) =>
               current.map((entry) =>
                 entry.id === image.id
@@ -175,16 +209,27 @@ export default function Properties() {
               type: 'info',
               text: `Uploading ${fileName || `image ${index + 1}`} (${Math.round(progress)}%)`,
             });
-          })
-        )
+          });
+
+          setImageUploads((current) =>
+            current.map((entry) =>
+              entry.id === image.id
+                ? { ...entry, url: result.downloadUrl, storagePath: result.storagePath, status: 'uploaded', progress: 100 }
+                : entry
+            )
+          );
+
+          return result;
+        })
       );
 
-      return uploaded.map((result) => result.downloadUrl).filter(Boolean);
+      return uploaded;
     } catch (error) {
+      const message = error?.message || 'Unable to upload one or more images. The listing will still be saved without them.';
       console.error('[Properties] Image upload failed:', error);
       setUploadMessage({
         type: 'error',
-        text: `Image upload failed: ${error.message || 'Unable to upload one or more images. The listing will still be saved without them.'}`,
+        text: `Image upload failed: ${message}`,
       });
       return [];
     } finally {
@@ -199,6 +244,7 @@ export default function Properties() {
       setProperties(data);
     } catch (err) {
       console.error('Error fetching admin properties:', err);
+      showNotice('error', err.message || 'Could not load properties.');
     } finally {
       setIsLoading(false);
     }
@@ -217,15 +263,17 @@ export default function Properties() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (prop) => {
+  const handleOpenEditModal = (prop, options = {}) => {
     setEditingProperty(prop);
     const existingImages = Array.isArray(prop.images) && prop.images.length > 0
       ? prop.images
       : (prop.image ? [prop.image] : []);
+    const existingStoragePaths = Array.isArray(prop.storagePaths) ? prop.storagePaths : [];
 
     const normalized = existingImages.map((url, index) => ({
       id: `existing-${prop.id}-${index}`,
       url,
+      storagePath: existingStoragePaths[index] || null,
       fileName: url.split('/').pop() || `property-${index + 1}.jpg`,
       isPrimary: index === 0,
       isNew: false,
@@ -242,28 +290,74 @@ export default function Properties() {
       priceLakhs: prop.priceLakhs || 0,
       dimensions: prop.dimensions || '30 ft x 40 ft',
       facing: prop.facing || 'East Facing',
-      approval: prop.approval || 'CMDA Approved',
+      approval: prop.approval || 'Pending Verification',
       approvalNo: prop.approvalNo || '',
       roadWidth: prop.roadWidth || '30 Feet Road',
       pattaStatus: prop.pattaStatus || 'Clear Single Ownership Patta',
       waterSource: prop.waterSource || 'Sweet Potable Water',
       images: existingImages,
+      imageUrls: existingImages,
+      storagePaths: existingStoragePaths,
       published: Boolean(prop.published),
+      verified: Boolean(prop.verified),
       featured: Boolean(prop.featured),
     });
     setUploadMessage({ type: '', text: '' });
     setFormError(null);
     setIsModalOpen(true);
+
+    if (options.focusImageUpload) {
+      setUploadMessage({ type: 'error', text: missingImageMessage });
+      setFormError(missingImageMessage);
+      setTimeout(() => {
+        imageUploadSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 120);
+    }
   };
 
   const handleSubmitForm = async (e) => {
     e.preventDefault();
     setFormError(null);
+    const shouldPublishAfterSave = saveMode === 'publish';
+    const hasImagesAttached = imageUploads.some((image) => image.url || image.file);
+    if (shouldPublishAfterSave && !hasImagesAttached) {
+      setUploadMessage({ type: 'error', text: missingImageMessage });
+      setFormError(missingImageMessage);
+      return;
+    }
+    const titleError = validatePropertyTitle(formData.title);
+    if (titleError) {
+      setFormError(titleError);
+      return;
+    }
+    if (!String(formData.location || '').trim()) {
+      setFormError('Enter a property location before saving.');
+      return;
+    }
+    if (!Number.isFinite(Number(formData.areaSqFt)) || Number(formData.areaSqFt) <= 0) {
+      setFormError('Enter a land area greater than zero.');
+      return;
+    }
+    if (!Number.isFinite(Number(formData.priceLakhs)) || Number(formData.priceLakhs) <= 0) {
+      setFormError('Enter an asking price greater than zero.');
+      return;
+    }
+    const publishRequested = shouldPublishAfterSave || formData.published;
+    if (publishRequested) {
+      const approvedDocumentation = /\b(approved|verified|registered)\b/i.test(String(formData.approval || ''));
+      if (!formData.verified || !approvedDocumentation) {
+        setFormError('Verify the approval documents and check the legal verification box before publishing.');
+        return;
+      }
+      if (!imageUploads.some((image) => image.url || image.file)) {
+        setFormError(missingImageMessage);
+        setUploadMessage({ type: 'error', text: missingImageMessage });
+        return;
+      }
+    }
     setIsSubmitting(true);
 
     try {
-      const existingImageUrls = imageUploads.filter((image) => !image.isNew).map((image) => image.url).filter(Boolean);
-
       let propertyId = editingProperty?.id || null;
       if (!propertyId) {
         const createdProperty = await createProperty({
@@ -271,21 +365,38 @@ export default function Properties() {
           images: [],
           image: '',
           imageUrls: [],
-          published: Boolean(formData.published),
+          storagePaths: [],
+          published: false,
+          verified: Boolean(formData.verified),
           featured: Boolean(formData.featured),
         });
         propertyId = createdProperty.id;
       }
 
-      const uploadedUrls = await uploadAllNewImages(propertyId);
-      const finalImageUrls = [...existingImageUrls, ...uploadedUrls].filter(Boolean);
+      const uploadedResults = await uploadAllNewImages(propertyId);
+      const finalImageEntries = [
+        ...imageUploads.filter((image) => !image.isNew).map((image) => ({
+          url: image.url,
+          storagePath: image.storagePath || null,
+        })),
+        ...uploadedResults.map((result) => ({
+          url: result?.downloadUrl || '',
+          storagePath: result?.storagePath || null,
+        })),
+      ].filter((entry) => entry.url);
+
+      const finalImageUrls = finalImageEntries.map((entry) => entry.url);
+      const finalStoragePaths = finalImageEntries.map((entry) => entry.storagePath).filter(Boolean);
       const primaryImage = imageUploads.find((image) => image.isPrimary)?.url || finalImageUrls[0] || '';
+      const nextPublishedValue = shouldPublishAfterSave || Boolean(formData.published);
       const propertyPayload = {
         ...formData,
         images: finalImageUrls,
         image: primaryImage,
         imageUrls: finalImageUrls,
-        published: Boolean(formData.published),
+        storagePaths: finalStoragePaths,
+        published: nextPublishedValue,
+        verified: Boolean(formData.verified),
         featured: Boolean(formData.featured),
       };
 
@@ -304,10 +415,14 @@ export default function Properties() {
           ? 'Property saved successfully with uploaded images.'
           : 'Property saved successfully without images. You can add them later from the edit modal.',
       });
+      setToastMessage(nextPublishedValue ? 'Property saved and published.' : 'Property saved successfully.');
+      setSaveMode('save');
+      setPublishError(null);
     } catch (err) {
-      const message = err?.message || 'Failed to save property listing.';
+      const message = getHumanErrorMessage(err);
       setFormError(message);
       setUploadMessage({ type: 'error', text: message });
+      setSaveMode('save');
     } finally {
       setIsSubmitting(false);
       setIsUploadingImages(false);
@@ -318,10 +433,37 @@ export default function Properties() {
     try {
       await togglePublishStatus(prop.id, prop.published);
       setProperties((prev) =>
-        prev.map((p) => (p.id === prop.id ? { ...p, published: !p.published } : p))
+        prev.map((p) => (p.id === prop.id ? { ...p, published: !p.published, status: !p.published ? 'published' : 'draft', isSoldOut: false, soldOutAt: null, soldOutNote: null, statusChangedBy: 'admin' } : p))
       );
+      setToastMessage(`Property ${!prop.published ? 'published' : 'moved back to draft'}.`);
+      setPublishError(null);
     } catch (err) {
-      alert(`Could not toggle status: ${err.message}`);
+      const humanMessage = getHumanErrorMessage(err);
+      console.error('[Properties] Could not toggle status:', err);
+      setPublishError({ propertyId: prop.id, message: humanMessage });
+    }
+  };
+
+  const handleStatusActionConfirm = async () => {
+    if (!statusActionProperty) return;
+
+    setIsUpdatingStatus(true);
+    try {
+      if (statusActionMode === 'sold_out') {
+        await markPropertySoldOut(statusActionProperty.id, 'Marked as sold out by admin');
+        setProperties((prev) => prev.map((p) => p.id === statusActionProperty.id ? { ...p, published: true, status: 'sold_out', isSoldOut: true, soldOutAt: new Date().toISOString(), soldOutNote: 'Marked as sold out by admin', statusChangedBy: 'admin' } : p));
+        setToastMessage('Property marked as sold out and hidden from the public site.');
+      } else {
+        await restorePropertyToPublished(statusActionProperty.id);
+        setProperties((prev) => prev.map((p) => p.id === statusActionProperty.id ? { ...p, published: true, status: 'published', isSoldOut: false, soldOutAt: null, soldOutNote: null, statusChangedBy: 'admin' } : p));
+        setToastMessage('Property restored to published and visible again.');
+      }
+      setStatusActionProperty(null);
+      setStatusActionMode('sold_out');
+    } catch (err) {
+      showNotice('error', `Could not update property status: ${err.message}`);
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -332,7 +474,7 @@ export default function Properties() {
         prev.map((p) => (p.id === prop.id ? { ...p, featured: !p.featured } : p))
       );
     } catch (err) {
-      alert(`Could not toggle featured: ${err.message}`);
+      showNotice('error', `Could not toggle featured: ${err.message}`);
     }
   };
 
@@ -343,8 +485,9 @@ export default function Properties() {
       await deleteProperty(deletingProperty.id, deletingProperty.title);
       setProperties((prev) => prev.filter((p) => p.id !== deletingProperty.id));
       setDeletingProperty(null);
+      setToastMessage('Property removed successfully.');
     } catch (err) {
-      alert(`Delete failed: ${err.message}`);
+      showNotice('error', `Delete failed: ${err.message}`);
     } finally {
       setIsDeleting(false);
     }
@@ -352,10 +495,18 @@ export default function Properties() {
 
   // Filter properties
   const displayedProperties = properties.filter((p) => {
-    if (filterStatus === 'published') return p.published === true;
-    if (filterStatus === 'draft') return p.published !== true;
+    if (filterStatus === 'published') return p.published === true && !p.isSoldOut && p.status !== 'sold_out';
+    if (filterStatus === 'draft') return p.published !== true && !p.isSoldOut && p.status !== 'sold_out';
+    if (filterStatus === 'sold_out') return p.isSoldOut || p.status === 'sold_out';
     return true;
   });
+
+  const hasImageCoverage = (row) => {
+    if (Array.isArray(row.images) && row.images.some(Boolean)) return true;
+    if (Array.isArray(row.imageUrls) && row.imageUrls.some(Boolean)) return true;
+    if (Array.isArray(row.storagePaths) && row.storagePaths.some(Boolean)) return true;
+    return Boolean(row.image || row.imageUrl);
+  };
 
   const columns = [
     {
@@ -374,6 +525,11 @@ export default function Properties() {
               <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
               {row.location}
             </p>
+            {!hasImageCoverage(row) && (
+              <span className="mt-1 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                No image
+              </span>
+            )}
           </div>
         </div>
       ),
@@ -410,8 +566,8 @@ export default function Properties() {
       key: 'published',
       header: 'Status',
       render: (row) => (
-        <div className="flex items-center gap-1.5">
-          <StatusBadge status={row.published ? 'published' : 'draft'} />
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <StatusBadge status={row.isSoldOut || row.status === 'sold_out' ? 'sold_out' : row.published ? 'published' : 'draft'} />
           {row.featured && <StatusBadge status="featured" />}
         </div>
       ),
@@ -430,11 +586,30 @@ export default function Properties() {
             className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
               row.published
                 ? 'text-emerald-600 hover:bg-emerald-50 border-emerald-200'
-                : 'text-slate-400 hover:bg-slate-100 border-slate-200'
+                : !hasImageCoverage(row)
+                  ? 'text-amber-600 hover:bg-amber-50 border-amber-200 bg-amber-50/50'
+                  : 'text-slate-400 hover:bg-slate-100 border-slate-200'
             }`}
-            title={row.published ? 'Unpublish Listing' : 'Publish Listing'}
+            title={row.published ? 'Unpublish Listing' : !hasImageCoverage(row) ? 'Publish Listing - add an image first' : 'Publish Listing'}
+            aria-label={row.published ? 'Unpublish listing' : !hasImageCoverage(row) ? 'Publish listing requires an image' : 'Publish listing'}
           >
             {row.published ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+          </button>
+
+          {/* Sold Out / Restore */}
+          <button
+            onClick={() => {
+              setStatusActionMode(row.isSoldOut || row.status === 'sold_out' ? 'published' : 'sold_out');
+              setStatusActionProperty(row);
+            }}
+            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+              row.isSoldOut || row.status === 'sold_out'
+                ? 'text-rose-600 hover:bg-rose-50 border-rose-200'
+                : 'text-slate-500 hover:bg-slate-100 border-slate-200'
+            }`}
+            title={row.isSoldOut || row.status === 'sold_out' ? 'Restore to Published' : 'Mark as Sold Out'}
+          >
+            {row.isSoldOut || row.status === 'sold_out' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           </button>
 
           {/* Toggle Featured */}
@@ -474,6 +649,7 @@ export default function Properties() {
 
   return (
     <div className="space-y-6">
+      <AdminNotice notice={notice} onClose={clearNotice} />
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -493,6 +669,42 @@ export default function Properties() {
           <span>Add New Plot</span>
         </button>
       </div>
+
+      {publishError && (
+        <div role="alert" aria-live="assertive" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <p className="text-sm font-medium">{publishError.message}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {publishError.message === 'Add at least one property image before publishing.' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const property = properties.find((item) => item.id === publishError.propertyId);
+                    if (property) {
+                      setPublishError(null);
+                      handleOpenEditModal(property, { focusImageUpload: true });
+                    }
+                  }}
+                  className="inline-flex items-center justify-center rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-100"
+                >
+                  Edit property
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setPublishError(null)}
+                className="rounded-lg p-1 text-amber-700 hover:bg-amber-100"
+                aria-label="Dismiss publish error"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Data Table */}
       <DataTable
@@ -533,6 +745,16 @@ export default function Properties() {
             >
               Drafts
             </button>
+            <button
+              onClick={() => setFilterStatus('sold_out')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                filterStatus === 'sold_out'
+                  ? 'bg-white text-rose-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Sold Out
+            </button>
           </div>
         }
       />
@@ -563,7 +785,7 @@ export default function Properties() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitForm} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+            <form ref={formRef} onSubmit={handleSubmitForm} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
               {formError && (
                 <div className="p-3 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs">
                   {formError}
@@ -576,11 +798,14 @@ export default function Properties() {
                   <input
                     type="text"
                     required
+                    minLength={12}
+                    maxLength={100}
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     placeholder="e.g. Emerald Crest – Gated Villa Plot near SIPCOT"
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
+                  <p className={`mt-1 text-[11px] ${validatePropertyTitle(formData.title) ? 'text-amber-700' : 'text-slate-500'}`} aria-live="polite">{formData.title.length}/100 characters · Use a clear title with property type and location.</p>
                 </div>
 
                 <div>
@@ -684,6 +909,7 @@ export default function Properties() {
                 <div className="sm:col-span-2">
                   <label className="block font-bold text-slate-700 mb-1">Property Images</label>
                   <div
+                    ref={imageUploadSectionRef}
                     className={`rounded-2xl border-2 border-dashed p-4 transition-all ${
                       isDraggingFiles
                         ? 'border-indigo-500 bg-indigo-50'
@@ -773,7 +999,7 @@ export default function Properties() {
                     {isUploadingImages && (
                       <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-indigo-700">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Uploading images to Cloudinary...
+                        Uploading images to Firebase Storage...
                       </div>
                     )}
                   </div>
@@ -792,6 +1018,16 @@ export default function Properties() {
               </div>
 
               <div className="pt-2 flex items-center gap-6 border-t border-slate-100">
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={formData.verified}
+                    onChange={(e) => setFormData({ ...formData, verified: e.target.checked })}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Legal documents reviewed and verified</span>
+                </label>
+
                 <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
                   <input
                     type="checkbox"
@@ -822,14 +1058,33 @@ export default function Properties() {
                   Cancel
                 </button>
                 <button
+                  type="button"
+                  onClick={() => {
+                    setSaveMode('publish');
+                    formRef.current?.requestSubmit();
+                  }}
+                  disabled={isSubmitting || isUploadingImages || !imageUploads.some((image) => image.url || image.file)}
+                  aria-disabled={isSubmitting || isUploadingImages || !imageUploads.some((image) => image.url || image.file)}
+                  title={!imageUploads.some((image) => image.url || image.file) ? 'Add at least one image to publish' : 'Save and publish this property'}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md shadow-emerald-600/30 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>Save & Publish</span>
+                </button>
+                <button
                   type="submit"
                   disabled={isSubmitting}
                   className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md shadow-indigo-600/30 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{editingProperty ? 'Save Changes' : 'Create Listing'}</span>
+                  <span>{editingProperty ? 'Save' : 'Create Listing'}</span>
                 </button>
               </div>
+              {!imageUploads.some((image) => image.url || image.file) && (
+                <div className="flex justify-end pt-1 text-[11px] font-medium text-amber-700">
+                  Add at least one image to publish
+                </div>
+              )}
             </form>
           </div>
         </div>
@@ -846,6 +1101,26 @@ export default function Properties() {
         variant="danger"
         isLoading={isDeleting}
       />
+
+      <ConfirmDialog
+        isOpen={Boolean(statusActionProperty)}
+        onClose={() => {
+          setStatusActionProperty(null);
+          setStatusActionMode('sold_out');
+        }}
+        onConfirm={handleStatusActionConfirm}
+        title={statusActionMode === 'sold_out' ? 'Mark property as sold out' : 'Restore property to published'}
+        message={
+          statusActionMode === 'sold_out'
+            ? `This will hide "${statusActionProperty?.title}" from public listings and preserve the record in Firestore for admin reference.`
+            : `This will make "${statusActionProperty?.title}" available again on the public website.`
+        }
+        confirmLabel={statusActionMode === 'sold_out' ? 'Mark Sold Out' : 'Restore to Published'}
+        variant={statusActionMode === 'sold_out' ? 'warning' : 'success'}
+        isLoading={isUpdatingStatus}
+      />
+
+      <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
     </div>
   );
 }

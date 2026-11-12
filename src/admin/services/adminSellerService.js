@@ -3,101 +3,113 @@ import {
   getDocs,
   doc,
   updateDoc,
-  addDoc,
+  writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, auth } from '../../firebase.js';
 import { SELLER_SUBMISSIONS_COLLECTION } from '../../services/sellerService.js';
 import { PROPERTIES_COLLECTION } from '../../services/propertyService.js';
 import { logAdminAction } from './adminLogService.js';
+import { assertValidPropertyTitle } from '../../utils/propertyValidation.js';
+
+export const LANDOWNER_SUBMISSIONS_COLLECTION = 'landowner_submissions';
 
 /**
- * Fetch all seller property proposals
+ * Fetch all landowner/seller property proposals (reads both sellerSubmissions and landowner_submissions)
  */
 export async function getAllSubmissions() {
   try {
-    const submissionsRef = collection(db, SELLER_SUBMISSIONS_COLLECTION);
-    const snap = await getDocs(submissionsRef);
-
     const submissions = [];
-    snap.forEach((docSnap) => {
-      submissions.push({
-        id: docSnap.id,
-        ...docSnap.data(),
+    const seenIds = new Set();
+
+    try {
+      const snap1 = await getDocs(collection(db, SELLER_SUBMISSIONS_COLLECTION));
+      snap1.forEach((docSnap) => {
+        if (!seenIds.has(docSnap.id)) {
+          seenIds.add(docSnap.id);
+          submissions.push({ id: docSnap.id, _collection: SELLER_SUBMISSIONS_COLLECTION, ...docSnap.data() });
+        }
       });
-    });
+    } catch (e) {
+      console.warn('[AdminSellerService] Could not read sellerSubmissions:', e.message);
+    }
+
+    try {
+      const snap2 = await getDocs(collection(db, 'sellerSubmissions'));
+      snap2.forEach((docSnap) => {
+        if (!seenIds.has(docSnap.id)) {
+          seenIds.add(docSnap.id);
+          submissions.push({ id: docSnap.id, _collection: LANDOWNER_SUBMISSIONS_COLLECTION, ...docSnap.data() });
+        }
+      });
+    } catch (e) {
+      // Ignored
+    }
 
     return submissions.sort((a, b) => {
-      const timeA = a.createdAt?.seconds || 0;
-      const timeB = b.createdAt?.seconds || 0;
+      const timeA = a.createdAt?.seconds || a.submittedAt?.seconds || 0;
+      const timeB = b.createdAt?.seconds || b.submittedAt?.seconds || 0;
       return timeB - timeA;
     });
   } catch (error) {
-    const message = `adminSellerService.getAllSubmissions() failed while reading the sellerSubmissions collection: ${error.message}`;
+    const message = `adminSellerService.getAllSubmissions() failed: ${error.message}`;
     console.error(`[AdminSellerService] ${message}`, error);
     throw new Error(message);
   }
 }
 
 /**
- * Approves a seller proposal and converts it into an active listing in `properties`
+ * Approves a seller proposal and creates a private draft for admin editing.
  */
-export async function approveAndPublishSubmission(submission, customOverrides = {}) {
+export async function approveAndCreateDraft(submission, customOverrides = {}) {
   const currentUser = auth.currentUser;
   if (!submission || !submission.id) {
     throw new Error('Valid submission object with ID is required.');
   }
 
   try {
-    const subDocRef = doc(db, SELLER_SUBMISSIONS_COLLECTION, submission.id);
+    const targetColl = submission._collection || SELLER_SUBMISSIONS_COLLECTION;
+    const subDocRef = doc(db, targetColl, submission.id);
+    const title = String(customOverrides.title ?? submission.title ?? '').trim().replace(/\s+/g, ' ');
+    assertValidPropertyTitle(title);
+    const location = String(customOverrides.location ?? submission.location ?? '').trim();
+    const areaSqFt = Number(customOverrides.areaSqFt ?? submission.areaSqFt);
+    const price = Number(customOverrides.price ?? submission.expectedPrice);
+    if (!location) throw new Error('Add a property location before approving this submission.');
+    if (!Number.isFinite(areaSqFt) || areaSqFt <= 0) throw new Error('A valid land area is required before creating a listing draft.');
+    if (!Number.isFinite(price) || price <= 0) throw new Error('A valid expected price is required before creating a listing draft.');
 
-    // 1. Mark submission as approved
-    await updateDoc(subDocRef, {
-      status: 'approved',
-      approvedBy: currentUser?.email || 'admin',
-      approvedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    // 2. Publish as an active listing into properties collection
-    const priceLakhs = Number(customOverrides.priceLakhs) || 
-      (submission.expectedPrice ? Number((submission.expectedPrice / 100000).toFixed(2)) : 50);
-    const price = Number(customOverrides.price) || (priceLakhs * 100000);
-    const areaSqFt = Number(customOverrides.areaSqFt) || Number(submission.areaSqFt) || 1200;
-    const pricePerSqFt = Math.round(price / (areaSqFt || 1));
-
-    const images = Array.isArray(submission.images) && submission.images.length > 0
-      ? submission.images
-      : ['https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=80'];
-
+    const priceLakhs = Number((price / 100000).toFixed(2));
+    const images = Array.isArray(submission.images) ? submission.images.filter(Boolean) : [];
     const newPropertyPayload = {
-      title: (customOverrides.title || submission.title || 'Verified Residential Plot').trim(),
-      subTitle: `CMDA Verified Plot in ${submission.location || 'Chennai'}`,
-      description: submission.description || 'Verified clear-title property approved by legal audit.',
+      title,
+      subTitle: submission.subTitle || '',
+      description: submission.description || '',
       propertyType: submission.propertyType || 'Residential Plot',
-      location: submission.location || 'Chennai',
-      area: submission.area || 'OMR',
-      city: 'Chennai',
-      areaSqFt: areaSqFt,
-      price: price,
-      priceLakhs: priceLakhs,
-      pricePerSqFt: pricePerSqFt,
-      facing: submission.facing || 'East Facing',
-      approval: submission.approval || 'CMDA Approved',
-      approvalNo: 'CMDA/VERIFIED/' + new Date().getFullYear(),
-      dimensions: submission.dimensions || '30 ft x 40 ft',
-      roadWidth: '30 Feet Blacktop Road',
-      pattaStatus: 'Clear Ownership Patta Verified',
-      waterSource: 'Sweet Potable Ground Water',
-      bankLoans: ['HDFC', 'SBI', 'ICICI'],
-      amenities: ['24/7 Security', 'Tar Road', 'EB Line'],
-      landmarks: [`Near ${submission.location || 'Chennai'}`],
-      appreciationRate: '+12.0% YoY',
-      images: images,
+      location,
+      area: submission.area || location,
+      district: submission.district || '',
+      town: submission.town || '',
+      city: submission.city || 'Chennai',
+      areaSqFt,
+      price,
+      priceLakhs,
+      pricePerSqFt: Math.round(price / areaSqFt),
+      ...(submission.facing ? { facing: submission.facing } : {}),
+      ...(submission.approval ? { approval: submission.approval } : {}),
+      ...(submission.approvalNo ? { approvalNo: submission.approvalNo } : {}),
+      ...(submission.dimensions ? { dimensions: submission.dimensions } : {}),
+      ...(submission.roadAccess ? { roadAccess: submission.roadAccess } : {}),
+      ...(submission.approvalDetails ? { approvalDetails: submission.approvalDetails } : {}),
+      images,
       imageUrls: images,
-      published: true, // Published to public listing immediately
+      image: images[0] || '',
+      published: false,
+      status: 'draft',
+      isSoldOut: false,
+      soldOutAt: null,
       featured: false,
-      verified: true,
+      verified: false,
       createdBy: currentUser?.uid || 'admin',
       originalSellerId: submission.sellerId || null,
       sourceSubmissionId: submission.id,
@@ -105,17 +117,23 @@ export async function approveAndPublishSubmission(submission, customOverrides = 
       updatedAt: serverTimestamp(),
     };
 
-    const propertiesRef = collection(db, PROPERTIES_COLLECTION);
-    const propertyDocRef = await addDoc(propertiesRef, newPropertyPayload);
-
-    // Link the created property back to the submission
-    await updateDoc(subDocRef, {
+    const propertyDocRef = doc(collection(db, PROPERTIES_COLLECTION));
+    const batch = writeBatch(db);
+    batch.set(propertyDocRef, newPropertyPayload);
+    batch.update(subDocRef, {
+      status: 'approved',
+      reviewStatus: 'approved',
+      approvedBy: currentUser?.email || 'admin',
+      approvedAt: serverTimestamp(),
+      reviewedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
       publishedPropertyId: propertyDocRef.id,
     });
+    await batch.commit();
 
     await logAdminAction({
-      action: 'SELLER_SUBMISSION_APPROVED_AND_PUBLISHED',
-      target: 'sellerSubmissions',
+      action: 'SELLER_SUBMISSION_APPROVED_DRAFT_CREATED',
+      target: targetColl,
       targetId: submission.id,
       details: {
         submissionTitle: submission.title,
@@ -129,7 +147,7 @@ export async function approveAndPublishSubmission(submission, customOverrides = 
       status: 'approved',
     };
   } catch (error) {
-    const message = `adminSellerService.approveAndPublishSubmission() failed for sellerSubmissions/${submission?.id}: ${error.message}`;
+    const message = `adminSellerService.approveAndCreateDraft() failed for ${submission?._collection || SELLER_SUBMISSIONS_COLLECTION}/${submission?.id}: ${error.message}`;
     console.error(`[AdminSellerService] ${message}`, error);
     throw new Error(message);
   }
@@ -138,14 +156,17 @@ export async function approveAndPublishSubmission(submission, customOverrides = 
 /**
  * Rejects a seller submission with reason
  */
-export async function rejectSubmission(id, reason = 'Document verification failed or incomplete title.') {
+export async function rejectSubmission(id, reason = 'Document verification failed or incomplete title.', collectionName = SELLER_SUBMISSIONS_COLLECTION) {
   if (!id) throw new Error('Submission ID is required.');
 
   try {
-    const docRef = doc(db, SELLER_SUBMISSIONS_COLLECTION, id);
+    const targetColl = collectionName || SELLER_SUBMISSIONS_COLLECTION;
+    const docRef = doc(db, targetColl, id);
     const payload = {
       status: 'rejected',
+      reviewStatus: 'rejected',
       rejectionReason: reason.trim(),
+      reviewedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
@@ -153,14 +174,14 @@ export async function rejectSubmission(id, reason = 'Document verification faile
 
     await logAdminAction({
       action: 'SELLER_SUBMISSION_REJECTED',
-      target: 'sellerSubmissions',
+      target: targetColl,
       targetId: id,
       details: { reason },
     });
 
     return { id, ...payload };
   } catch (error) {
-    const message = `adminSellerService.rejectSubmission() failed for sellerSubmissions/${id}: ${error.message}`;
+    const message = `adminSellerService.rejectSubmission() failed for ${id}: ${error.message}`;
     console.error(`[AdminSellerService] ${message}`, error);
     throw new Error(message);
   }
@@ -169,14 +190,17 @@ export async function rejectSubmission(id, reason = 'Document verification faile
 /**
  * Request corrections/clarifications from seller
  */
-export async function requestRevision(id, notes = 'Please provide updated survey sketch and clear patta document.') {
+export async function requestRevision(id, notes = 'Please provide updated survey sketch and clear patta document.', collectionName = SELLER_SUBMISSIONS_COLLECTION) {
   if (!id) throw new Error('Submission ID is required.');
 
   try {
-    const docRef = doc(db, SELLER_SUBMISSIONS_COLLECTION, id);
+    const targetColl = collectionName || SELLER_SUBMISSIONS_COLLECTION;
+    const docRef = doc(db, targetColl, id);
     const payload = {
       status: 'needs_revision',
+      reviewStatus: 'needs_revision',
       revisionNotes: notes.trim(),
+      reviewedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
@@ -184,14 +208,14 @@ export async function requestRevision(id, notes = 'Please provide updated survey
 
     await logAdminAction({
       action: 'SELLER_REVISION_REQUESTED',
-      target: 'sellerSubmissions',
+      target: targetColl,
       targetId: id,
       details: { notes },
     });
 
     return { id, ...payload };
   } catch (error) {
-    const message = `adminSellerService.requestRevision() failed for sellerSubmissions/${id}: ${error.message}`;
+    const message = `adminSellerService.requestRevision() failed for ${id}: ${error.message}`;
     console.error(`[AdminSellerService] ${message}`, error);
     throw new Error(message);
   }

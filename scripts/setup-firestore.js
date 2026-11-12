@@ -205,7 +205,7 @@ const SEED_USERS = [
     data: {
       uid: 'seed-user-admin',
       name: 'PlotFinder Administrator',
-      email: 'admin@plotfinder.in',
+      email: 'visitor@example.com',
       phone: '+91 044 4890 2026',
       role: 'admin',
     }

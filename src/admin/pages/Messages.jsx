@@ -7,8 +7,10 @@ import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { MessageSquare, Mail, Phone, Calendar, Eye, Trash2, X, CheckCircle2 } from 'lucide-react';
 import { logAdminAction } from '../services/adminLogService';
+import AdminNotice, { useAdminNotice } from '../components/AdminNotice';
 
 export default function Messages() {
+  const { notice, showNotice, clearNotice } = useAdminNotice();
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeMessage, setActiveMessage] = useState(null);
@@ -25,6 +27,7 @@ export default function Messages() {
       setMessages(list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
     } catch (err) {
       console.error('Error fetching contact messages:', err);
+      showNotice('error', err.message || 'Could not load contact messages.');
     } finally {
       setIsLoading(false);
     }
@@ -40,6 +43,7 @@ export default function Messages() {
       try {
         const docRef = doc(db, CONTACT_MESSAGES_COLLECTION, msg.id);
         await updateDoc(docRef, { status: 'read', updatedAt: serverTimestamp() });
+        await logAdminAction({ action: 'MESSAGE_MARKED_READ', target: 'contactMessages', targetId: msg.id });
         setMessages((prev) =>
           prev.map((m) => (m.id === msg.id ? { ...m, status: 'read' } : m))
         );
@@ -65,7 +69,7 @@ export default function Messages() {
         targetId: msgId,
       });
     } catch (e) {
-      alert(`Error updating message: ${e.message}`);
+      showNotice('error', `Could not update message: ${e.message}`);
     }
   };
 
@@ -73,10 +77,11 @@ export default function Messages() {
     if (!deletingId) return;
     try {
       await deleteDoc(doc(db, CONTACT_MESSAGES_COLLECTION, deletingId));
+      await logAdminAction({ action: 'MESSAGE_DELETED', target: 'contactMessages', targetId: deletingId });
       setMessages((prev) => prev.filter((m) => m.id !== deletingId));
       setDeletingId(null);
     } catch (e) {
-      alert(`Delete error: ${e.message}`);
+      showNotice('error', `Could not delete message: ${e.message}`);
     }
   };
 
@@ -148,6 +153,7 @@ export default function Messages() {
 
   return (
     <div className="space-y-6">
+      <AdminNotice notice={notice} onClose={clearNotice} />
       <div>
         <h2 className="text-xl font-black text-slate-900 tracking-tight">
           Public Contact Messages ({messages.length})
