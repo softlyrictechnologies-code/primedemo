@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { CheckCircle2, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { ShieldCheck, X } from 'lucide-react';
 
 export default function Toast({ message, onClose }) {
   useEffect(() => {

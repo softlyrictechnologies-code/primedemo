@@ -13,11 +13,6 @@ export function getSafeAdminDiagnostics(user = auth.currentUser, tokenClaims = {
   const claimValue = tokenClaims?.admin ?? null;
   const fallbackRole = tokenClaims?.role === 'admin' || tokenClaims?.role === 'super_admin' ? true : null;
   const adminClaimValue = claimValue ?? fallbackRole;
-  const hasAdminClaim = Boolean(
-    tokenClaims?.admin === true ||
-      tokenClaims?.superAdmin === true ||
-      ['admin', 'super_admin', 'super-admin'].includes(tokenClaims?.role)
-  );
   const hasSuperAdminClaim = Boolean(
     tokenClaims?.superAdmin === true ||
       ['super_admin', 'super-admin'].includes(tokenClaims?.role)
@@ -83,7 +78,7 @@ export function AdminAuthProvider({ children }) {
           isAdminDoc = true;
           if (adminDocSnap.data()?.role) profileData = { ...profileData, role: adminDocSnap.data().role };
         }
-      } catch (err) {
+      } catch {
         // Ignored
       }
 
@@ -91,12 +86,6 @@ export function AdminAuthProvider({ children }) {
         ['admin', 'super_admin', 'super-admin'].includes(tokenClaims.role) || isAdminDoc
         ? 'admin'
         : (profileData?.role || tokenClaims.role || null);
-      const hasAdminClaim = Boolean(
-        tokenClaims.admin === true ||
-          tokenClaims.superAdmin === true ||
-          ['admin', 'super_admin', 'super-admin'].includes(tokenClaims.role) ||
-          isAdminDoc
-      );
       const hasSuperAdminClaim = Boolean(
         tokenClaims.superAdmin === true || ['super_admin', 'super-admin'].includes(tokenClaims.role)
       );
@@ -173,7 +162,7 @@ export function AdminAuthProvider({ children }) {
           if (adminDocSnap.exists()) {
             isAdminDoc = true;
           }
-        } catch (e) {
+        } catch {
           // Ignore
         }
       }

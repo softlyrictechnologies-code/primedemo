@@ -177,7 +177,7 @@ export default function HomePage() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {typeTiles.map((tile, index) => {
+            {typeTiles.map((tile) => {
               const Icon = tile.icon;
               const tileTitle = siteContent[`offering${tile.number}Title`] || tile.fallbackTitle;
               const tileNote = siteContent[`offering${tile.number}Note`] || tile.fallbackNote;
@@ -200,6 +200,11 @@ export default function HomePage() {
             <div><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#2f6d51]">Just listed</p><h2 className="mt-2 text-2xl font-bold text-[#113222]">{siteContent.latestTitle}</h2><p className="mt-1 text-sm text-neutral-600">{siteContent.latestSubtitle}</p></div>
             <Link to="/properties" className="hidden items-center gap-2 text-sm font-semibold text-[#2f6d51] sm:inline-flex">Browse all <ArrowRight className="h-4 w-4" /></Link>
           </div>
+          {error && (
+            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {error}
+            </div>
+          )}
           {latest.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {latest.slice(0, 3).map((property) => (
               <Link key={property.id} to={`/properties/${property.id}`} className="group overflow-hidden rounded-xl border border-[#dfe5dd] bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg">

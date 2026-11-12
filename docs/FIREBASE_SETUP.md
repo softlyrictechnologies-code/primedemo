@@ -1,151 +1,139 @@
-# PlotFinder — Firebase Backend & Firestore Integration Guide
+# Prime Housing Firebase setup guide
 
-This guide details the complete configuration, Firestore security rules, setup scripts, and operational workflows for connecting **PlotFinder Chennai** to Google Cloud Firestore.
-
----
-
-## 1. Project Configuration Summary
-
-- **Firebase Project ID**: `plotfinder-be7f5`
-- **Frontend Tech Stack**: React 19 + Vite + Tailwind CSS + Firebase Web SDK v12+
-- **Database**: Cloud Firestore
-- **Local Environment File**: `.env.local` (excluded from Git)
-- **Security Rules**: `firestore.rules`
-- **Initial Setup Script**: `scripts/setup-firestore.js` (executed via `npm run setup:firestore`)
+This repository is configured for the Firebase project `prime-housing-72330` and supports both the public property website and the protected admin panel. The app reads from Firestore, uses Firebase Auth for admin login, and keeps the Firebase Web config in local environment files that are not committed to source control.
 
 ---
 
-## 2. One-Time Firebase Console Steps
+## 1. Project configuration
 
-Before running the automated seeding script or querying Firestore from your website, perform these quick steps in the Firebase Console:
+- Firebase project: `prime-housing-72330`
+- Frontend: React 19 + Vite 8 + Tailwind v4 + Firebase Web SDK
+- Runtime modes: `public`, `admin`, and `all` via `VITE_APP_MODE`
+- Firestore rules: `firestore.rules`
+- Hosting config: `firebase.json`
+- Local env file: `.env.local` (kept local; do not commit)
 
-### Step 2.1: Enable Cloud Firestore
-1. Open the [Firebase Console](https://console.firebase.google.com/project/plotfinder-be7f5/firestore).
-2. If you see **"Create database"**, click it.
-3. Choose a location closest to your users (e.g., `asia-south1` for Mumbai / India or `nam5` / `us-central1`).
-4. Select **Start in production mode** (or test mode if developing locally).
-5. Click **Create**.
+The web app expects these Firebase variables in the local environment when you run the app:
 
-### Step 2.2: Download Firebase Admin Service Account Key (for local setup)
-To allow the local setup script (`npm run setup:firestore`) to safely populate the initial collections and demo properties without permission restrictions:
-1. Navigate to: [Service Accounts Settings](https://console.firebase.google.com/project/plotfinder-be7f5/settings/serviceaccounts/adminsdk).
-2. Click **Generate new private key** and confirm.
-3. A JSON file will download. Rename it to:
-   ```
-   serviceAccountKey.json
-   ```
-4. Move this file to the root directory of this project (`d:\demo ui\serviceAccountKey.json`).
-   > **Security Note:** `serviceAccountKey.json` is already listed in `.gitignore` and `.env.local` is also ignored. Never commit private keys to GitHub.
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID`
+- `VITE_APP_MODE`
 
 ---
 
-## 3. Automatically Creating Collections & Demo Documents
+## 2. Required Firebase console setup
 
-Run the automated setup script:
+### 2.1 Enable Firebase Auth
+1. Open the Firebase console for `prime-housing-72330`.
+2. Go to Authentication.
+3. Enable the email/password sign-in provider for admin login.
+4. Ensure the admin account you use for the dashboard exists as a signed-in user in Firebase Auth.
+
+### 2.2 Enable Firestore
+1. Go to Firestore Database in the Firebase console.
+2. Create the database if it does not already exist.
+3. Use a region close to the target users, such as `asia-south1` or `us-central1`.
+4. Start in production mode unless you are intentionally doing local-only testing.
+
+### 2.3 Enable Storage
+1. Open Firebase Storage.
+2. Ensure the default bucket is enabled.
+3. Confirm the bucket matches the value in `VITE_FIREBASE_STORAGE_BUCKET`.
+
+### 2.4 Create the admin user
+1. In Firebase Authentication, create or confirm the admin email account.
+2. In Firestore, create or update the matching user in the `users` collection with `role: 'admin'` if your workflow relies on Firestore profile metadata.
+3. Add the custom claim `admin: true` or `role: 'admin'` to the user to satisfy the dashboard access checks.
+
+> The app checks both Firebase custom claims and Firestore admin profile flags before granting access. Do not add admin privileges in code; create the actual Firebase user and claim in the console or via script.
+
+---
+
+## 3. Local environment configuration
+
+Create a local `.env.local` file with the project values from your Firebase web app, then run the app. Do not commit the file or any service-account JSON files.
+
+Example keys are already represented in the project template file `.env.example`, but the actual values must stay local and private.
 
 ```bash
+npm install
+npm run dev
+```
+
+---
+
+## 4. Useful scripts
+
+The project includes several repo-local scripts that are safe to run without embedding secrets in code:
+
+```bash
+npm run seed
 npm run setup:firestore
+npm run check:firebase
+npm run verify:backend
 ```
 
-### What this script does:
-1. Confirms the target project ID (`plotfinder-be7f5`).
-2. Checks the `properties` collection in Firestore.
-3. Uses **deterministic document IDs** (`demo-siruseri-emerald`, `demo-ecr-azure`, `demo-navalur-grandeur`).
-4. If a document already exists, it is **skipped** to avoid overwriting your custom changes.
-5. If missing, it writes the demo plot with realistic Chennai attributes (Siruseri, ECR, Navalur) and marks it with `isDemo: true` and `published: true`.
-6. Prints a detailed summary of created vs. skipped documents.
+These scripts rely on environment variables and the Firebase project configuration, not hardcoded API keys.
 
 ---
 
-## 4. Firestore Collections Architecture
+## 5. Firestore rules and hosting
 
-| Collection | Purpose | How it is Populated |
-|---|---|---|
-| **`properties`** | Real estate listings (title, price, area, location, approvals, etc.) | Initial demo data via `npm run setup:firestore`, or by authorized users/admin via `addProperty()` |
-| **`inquiries`** | Customer inquiries and site visit requests | Automatically created when a user submits the **"Schedule Free Site Visit"** modal |
-| **`users`** | User profiles, roles, and saved preferences | Populated when users register/log in via Firebase Authentication |
-| **`favorites`** | Saved plot IDs linked to a `userId` | Populated when an authenticated buyer clicks "Save / Favorite" |
+The repo includes the rules in `firestore.rules`, and the hosting configuration in `firebase.json`.
 
-> **Note on Firestore collections:** In Firestore, collections only physically exist when they contain at least one document. Creating dummy empty documents in `inquiries`, `users`, and `favorites` is intentionally avoided so your database remains clean.
+To deploy rules:
 
----
-
-## 5. Security Rules Configuration (`firestore.rules`)
-
-The project includes production-ready security rules in `firestore.rules`:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // 1. Properties: Public can only view published properties.
-    // Writes require authentication or admin privileges.
-    match /properties/{propertyId} {
-      allow read: if resource.data.published == true || request.auth.token.admin == true;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth.token.admin == true ||
-        (request.auth != null && resource.data.createdBy == request.auth.uid);
-    }
-
-    // 2. Users: Only user or admin can view/edit profile
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // 3. Inquiries: Public can submit site visits (validated), only admins can read/manage
-    match /inquiries/{inquiryId} {
-      allow create: if request.resource.data.keys().hasAll(['propertyId', 'customerName', 'customerPhone'])
-                    && request.resource.data.customerName is string
-                    && request.resource.data.customerPhone is string;
-      allow read, update, delete: if request.auth.token.admin == true;
-    }
-
-    // 4. Favorites: Users can only manage their own favorites
-    match /favorites/{favoriteId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
-    }
-  }
-}
-```
-
-### Deploying the Security Rules:
-#### Option A: Firebase Console (Quickest)
-1. Go to [Firestore Rules](https://console.firebase.google.com/project/plotfinder-be7f5/firestore/rules).
-2. Copy the content of [firestore.rules](file:///d:/demo%20ui/firestore.rules).
-3. Paste into the editor and click **Publish**.
-
-#### Option B: Firebase CLI
 ```bash
-npm install -g firebase-tools
 firebase login
-firebase use plotfinder-be7f5
+firebase use prime-housing-72330
 firebase deploy --only firestore:rules
 ```
 
----
+To deploy hosting:
 
-## 6. How the Frontend Connects to Firestore
+```bash
+firebase deploy --only hosting
+```
 
-- **`src/firebase.js`**: Initializes the Firebase Web SDK app, `db` (Firestore), and `auth`.
-- **`src/services/propertyService.js`**:
-  - `getPublishedProperties()`: Queries `properties` where `published == true`.
-  - `getPropertyById(id)`: Fetches individual property details.
-  - `addProperty(data)`: Authorized workflow to create new listings.
-  - `updateProperty(id, data)`: Authorized workflow to update listings.
-  - `submitInquiry(data)`: Securely sends site visit bookings to the `inquiries` collection.
-- **`src/App.jsx`**:
-  - Dynamically loads live listings from Firestore.
-  - Displays a live status badge (`Cloud Firestore Live: X Listings Synchronized`).
-  - Includes a skeleton pulsing loader while fetching data.
-  - Includes a "Sync Now" button to re-fetch on demand.
-  - Provides seamless fallback to cached listings if Firestore is empty or initializing.
+Do not change the logic in `firestore.rules` or `storage.rules` unless you are explicitly updating project security requirements. This task kept those files intact.
 
 ---
 
-## 7. Troubleshooting
+## 6. Admin access notes
 
-| Symptom | Cause | Solution |
-|---|---|---|
-| `FirebaseError: [code=not-found]: 5 NOT_FOUND` | Firestore database is not created in Firebase Console yet. | Open Firebase Console -> Cloud Firestore -> Click "Create database". |
-| `FirebaseError: Missing or insufficient permissions` | Rules are set to lock mode or user is unauthenticated. | Deploy `firestore.rules` or ensure the document being queried has `published: true`. |
-| Setup script cannot find `serviceAccountKey.json` | Key not downloaded yet. | Download key from Project Settings > Service accounts > "Generate new private key" and save as `serviceAccountKey.json`. |
+The dashboard checks the authenticated user for:
+
+- `admin === true` custom claim
+- `role === 'admin'` or `role === 'super_admin'`
+- Firestore `admins` or `users` data for admin verification
+
+If a user can sign in but is denied access, check that the Firebase Auth user has the expected custom claim and that the project is using the correct environment values.
+
+---
+
+## 7. Security reminders
+
+- Never commit `.env.local`, `.env`, or any service-account JSON.
+- Do not hardcode Firebase API keys into the repository.
+- Keep service credentials outside the workspace or in secure secret storage.
+- Do not publish or attach service account keys to issues, PRs, or chat threads.
+
+---
+
+## 8. Troubleshooting checklist
+
+When the app cannot connect to Firebase:
+
+1. Check that `.env.local` exists and contains the right values.
+2. Confirm the project ID matches `prime-housing-72330`.
+3. Validate that Authentication and Firestore are enabled in the Firebase console.
+4. Confirm the user has the proper admin claim or role.
+5. Run the repo verification scripts to confirm the configuration state.
+
+This setup is designed to preserve the public site and admin panel behavior without changing the Firebase data model or project design.
+

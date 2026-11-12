@@ -2,7 +2,7 @@ const admin = require("firebase-admin");
 
 admin.initializeApp({
   credential: admin.credential.applicationDefault(),
-  projectId: "plotfinder-be7f5"
+  projectId: "prime-housing-72330"
 });
 
 const db = admin.firestore();

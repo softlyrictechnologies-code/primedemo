@@ -12,10 +12,10 @@ const rootDir = path.resolve(__dirname, '..');
 dotenv.config({ path: path.join(rootDir, '.env.local') });
 dotenv.config({ path: path.join(rootDir, '.env') });
 
-const EXPECTED_PROJECT_ID = process.env.VITE_FIREBASE_PROJECT_ID || 'plotfinder-be7f5';
+const EXPECTED_PROJECT_ID = process.env.VITE_FIREBASE_PROJECT_ID || 'prime-housing-72330';
 
 console.log('='.repeat(72));
-console.log('  PLOTFINDER CHENNAI — AUTOMATED FIREBASE & BACKEND HEALTH CHECK');
+console.log('  PRIME HOUSING — AUTOMATED FIREBASE & BACKEND HEALTH CHECK');
 console.log('='.repeat(72));
 console.log(`Target Project: ${EXPECTED_PROJECT_ID}`);
 console.log(`Timestamp     : ${new Date().toISOString()}\n`);

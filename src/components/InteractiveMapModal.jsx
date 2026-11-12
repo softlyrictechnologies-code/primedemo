@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapPin, ShieldCheck, X, Eye, Navigation, Layers, Compass } from 'lucide-react';
+import { MapPin, ShieldCheck, Eye, Compass } from 'lucide-react';
 
 export default function InteractiveMapModal({ plots, onSelectPlot }) {
   const [selectedMapPlot, setSelectedMapPlot] = useState(plots[0] || null);

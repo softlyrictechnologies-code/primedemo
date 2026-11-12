@@ -57,7 +57,7 @@ export async function createUserProfile(userData) {
 
   const payload = {
     uid: targetUid,
-    name: (userData.name || currentUser.displayName || 'PlotFinder User').trim().slice(0, 100),
+    name: (userData.name || currentUser.displayName || 'Prime Housing User').trim().slice(0, 100),
     email: (userData.email || currentUser.email || '').trim().toLowerCase(),
     phone: (userData.phone || currentUser.phoneNumber || '').trim().slice(0, 20),
     role: role,

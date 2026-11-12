@@ -1,17 +1,17 @@
 import React, { Suspense, lazy, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { APP_MODE, isPublicOnly } from './config/appMode';
-import HomePage from './pages/HomePage';
-import PropertiesPage from './pages/PropertiesPage';
-import PropertyDetailsPage from './pages/PropertyDetailsPage';
-import SubmitLandPage from './pages/SubmitLandPage';
-import AboutPage from './pages/AboutPage';
-import ContactPage from './pages/ContactPage';
-import DevUiKitPage from './pages/DevUiKitPage';
-import NotFoundPage from './pages/NotFoundPage';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { APP_MODE, isPublicOnly } from '../config/appMode';
+import HomePage from '../pages/HomePage';
+import PropertiesPage from '../pages/PropertiesPage';
+import PropertyDetailsPage from '../pages/PropertyDetailsPage';
+import SubmitLandPage from '../pages/SubmitLandPage';
+import AboutPage from '../pages/AboutPage';
+import ContactPage from '../pages/ContactPage';
+import DevUiKitPage from '../pages/DevUiKitPage';
+import NotFoundPage from '../pages/NotFoundPage';
 
 const AdminRoutes = !isPublicOnly
-  ? lazy(() => import('./admin/routes'))
+  ? lazy(() => import('../admin/routes'))
   : null;
 
 function AppMeta() {

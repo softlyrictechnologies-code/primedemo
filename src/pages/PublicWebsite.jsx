@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Header from '../components/Header';
 import LevitatingHero from '../components/LevitatingHero';
 import QuickFiltersBar from '../components/QuickFiltersBar';
@@ -12,7 +12,7 @@ import Footer from '../components/Footer';
 
 import { BUDGET_RANGES } from '../data/plotsData';
 import { getPublishedProperties } from '../services/propertyService';
-import { Sparkles, Building2, Compass, SlidersHorizontal, Database, Loader2, RefreshCw } from 'lucide-react';
+import { Building2, Compass } from 'lucide-react';
 
 export default function PublicWebsite() {
   // Firestore Properties State
@@ -38,7 +38,7 @@ export default function PublicWebsite() {
   const [isComparisonDrawerOpen, setIsComparisonDrawerOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  const fetchPropertiesData = async () => {
+  const fetchPropertiesData = useCallback(async () => {
     setIsLoadingProperties(true);
     setLoadError(null);
     try {
@@ -51,11 +51,11 @@ export default function PublicWebsite() {
     } finally {
       setIsLoadingProperties(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchPropertiesData();
-  }, []);
+  }, [fetchPropertiesData]);
 
   const showToast = (msg) => {
     setToastMessage(msg);

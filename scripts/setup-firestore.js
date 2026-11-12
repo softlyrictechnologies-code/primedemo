@@ -11,10 +11,10 @@ const rootDir = path.resolve(__dirname, '..');
 dotenv.config({ path: path.join(rootDir, '.env.local') });
 dotenv.config({ path: path.join(rootDir, '.env') });
 
-const EXPECTED_PROJECT_ID = process.env.VITE_FIREBASE_PROJECT_ID || 'plotfinder-be7f5';
+const EXPECTED_PROJECT_ID = process.env.VITE_FIREBASE_PROJECT_ID || 'prime-housing-72330';
 
 console.log('='.repeat(70));
-console.log('  PLOTFINDER CHENNAI — AUTOMATIC FIRESTORE INITIALIZATION');
+console.log('  PRIME HOUSING — AUTOMATIC FIRESTORE INITIALIZATION');
 console.log('='.repeat(70));
 console.log(`Target Firebase Project ID : ${EXPECTED_PROJECT_ID}`);
 
@@ -204,7 +204,7 @@ const SEED_USERS = [
     docId: 'seed-user-admin',
     data: {
       uid: 'seed-user-admin',
-      name: 'PlotFinder Administrator',
+      name: 'Prime Housing Administrator',
       email: 'visitor@example.com',
       phone: '+91 044 4890 2026',
       role: 'admin',
@@ -274,7 +274,7 @@ const SEED_CONTACT_MESSAGES = [
       email: 'priya.n@example.com',
       phone: '+91 97909 11223',
       subject: 'Inquiry regarding CMDA Title Verification Assistance',
-      message: 'Hello PlotFinder team, do you provide assistance in verifying Patta transfer and encumbrance certificates for plots in Sholinganallur?',
+      message: 'Hello Prime Housing team, do you provide assistance in verifying Patta transfer and encumbrance certificates for plots in Sholinganallur?',
       status: 'new',
     }
   }
