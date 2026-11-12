@@ -35,16 +35,22 @@ service firebase.storage {
 
     // Public sellers/landowners: upload photos with a submission, admin reviews them
     match /landowner_submissions/{allPaths=**} {
+      allow get: if true;
       allow create: if isImage();
-      allow read, update, delete: if isAdmin();
+      allow list: if false;
+      allow update, delete: if isAdmin();
     }
     match /sellerSubmissions/{allPaths=**} {
+      allow get: if true;
       allow create: if isImage();
-      allow read, update, delete: if isAdmin();
+      allow list: if false;
+      allow update, delete: if isAdmin();
     }
     match /submissions/{allPaths=**} {
+      allow get: if true;
       allow create: if isImage();
-      allow read, update, delete: if isAdmin();
+      allow list: if false;
+      allow update, delete: if isAdmin();
     }
 
     match /{allPaths=**} {

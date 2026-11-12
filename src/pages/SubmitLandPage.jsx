@@ -227,7 +227,7 @@ export default function SubmitLandPage() {
 
               <div>
                 <label className="mb-1 block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Phone number</label>
-                <input type="tel" name="sellerPhone" value={form.sellerPhone} onChange={handleChange} pattern="^(?:[+]?91[ -]?)?[6-9](?:[0-9][ -]?){9}$" maxLength={18} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white" placeholder="+91 98765 43210" required />
+                <input type="tel" name="sellerPhone" value={form.sellerPhone} onChange={handleChange} pattern="^(?:\+?91[ \-]?)?[6-9](?:[0-9][ \-]?){9}$" title="Enter a valid 10-digit Indian mobile number" maxLength={18} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white" placeholder="+91 98765 43210" required />
               </div>
 
               <div>

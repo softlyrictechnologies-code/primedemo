@@ -1,9 +1,9 @@
 import {
   collection,
+  addDoc,
   getDocs,
   doc,
   updateDoc,
-  runTransaction,
   query,
   orderBy,
   serverTimestamp,
@@ -89,13 +89,12 @@ function validateInquiryData(data) {
 export async function submitInquiry(inquiryData) {
   try {
     const validated = validateInquiryData(inquiryData);
-    const dateKey = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const docId = `${validated.propertyId}_${validated.phone}_${dateKey}`;
-    const docRef = doc(db, INQUIRIES_COLLECTION, docId);
+    const inquiriesRef = collection(db, INQUIRIES_COLLECTION);
 
     const payload = {
       propertyId: validated.propertyId,
       propertyTitle: (validated.propertyTitle || '').slice(0, 150),
+      title: (validated.propertyTitle || '').slice(0, 150),
       name: validated.name,
       phone: validated.phone,
       email: validated.email,
@@ -104,20 +103,12 @@ export async function submitInquiry(inquiryData) {
       status: 'new',
       source: inquiryData.source || 'website',
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
     };
 
-    await runTransaction(db, async (transaction) => {
-      const existingDoc = await transaction.get(docRef);
-      if (existingDoc.exists()) throw new Error('We already received your enquiry today');
-      transaction.set(docRef, payload);
-    });
-    return { id: docId, ...payload };
+    const docRef = await addDoc(inquiriesRef, payload);
+    return { id: docRef.id, ...payload };
   } catch (error) {
     console.error('Error submitting inquiry to Firestore:', error);
-    if (error?.code === 'permission-denied') {
-      throw new Error('We already received your enquiry today');
-    }
     throw error;
   }
 }

@@ -215,7 +215,7 @@ export default function PropertyDetailsPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Phone</label>
-                  <input name="phone" value={form.phone} onChange={handleChange} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white" placeholder="9876543210" pattern="^[6-9][0-9]{9}$" required />
+                  <input name="phone" value={form.phone} onChange={handleChange} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white" placeholder="9876543210" pattern="^(?:\+?91[ \-]?)?[6-9](?:[0-9][ \-]?){9}$" title="Enter a valid 10-digit Indian mobile number" required />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Email</label>

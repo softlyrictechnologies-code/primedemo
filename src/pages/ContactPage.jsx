@@ -85,7 +85,7 @@ export default function ContactPage() {
               </div>
               <div className="sm:col-span-1">
                 <label className="mb-1 block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{siteContent.contactPhoneLabel}</label>
-                <input name="phone" value={form.phone} onChange={handleChange} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white" placeholder={siteContent.contactPhonePlaceholder} pattern="^[6-9][0-9]{9}$" required />
+                <input name="phone" value={form.phone} onChange={handleChange} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white" placeholder={siteContent.contactPhonePlaceholder} pattern="^(?:\+?91[ \-]?)?[6-9](?:[0-9][ \-]?){9}$" title="Enter a valid 10-digit Indian mobile number" required />
               </div>
               <div className="sm:col-span-1">
                 <label className="mb-1 block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{siteContent.contactEmailLabel}</label>
