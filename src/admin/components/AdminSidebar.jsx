@@ -36,6 +36,7 @@ const NAV_ITEMS = [
 export default function AdminSidebar({ isOpen, onClose }) {
   const { currentUser, logout, adminProfile, isSuperAdmin, role } = useAdminAuth();
   const siteContent = usePublicSiteContent();
+  const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL || '/';
   const allowedItems = NAV_ITEMS.filter((item) => {
     if (role === 'admin') return true;
     if (role === 'editor') return ['/admin/dashboard', '/admin/properties', '/admin/locations', '/admin/insights', '/admin/content'].includes(item.path);
@@ -113,7 +114,7 @@ export default function AdminSidebar({ isOpen, onClose }) {
         <div className="p-4 border-t border-slate-800/80 bg-slate-950/30 space-y-3">
           {/* Link back to public site */}
           <Link
-            to="/"
+            to={publicSiteUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition-colors group border border-slate-700/50"
@@ -128,7 +129,7 @@ export default function AdminSidebar({ isOpen, onClose }) {
           {/* Admin user info & logout */}
           <div className="pt-2 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-sm">
+              <div className="w-8 h-8 rounded-full bg-linear-to-tr from-indigo-500 to-purple-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-sm">
                 {(currentUser?.email || 'A')[0].toUpperCase()}
               </div>
               <div className="min-w-0">
