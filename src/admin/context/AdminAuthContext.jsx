@@ -11,8 +11,13 @@ const AdminAuthContext = createContext(null);
 
 export function getSafeAdminDiagnostics(user = auth.currentUser, tokenClaims = {}) {
   const claimValue = tokenClaims?.admin ?? null;
-  const fallbackRole = tokenClaims?.role === 'admin' || tokenClaims?.role === 'super_admin' ? true : null;
+  const fallbackRole = tokenClaims?.role === 'admin' || tokenClaims?.role === 'super_admin' || tokenClaims?.role === 'super-admin' ? true : null;
   const adminClaimValue = claimValue ?? fallbackRole;
+  const hasAdminClaim = Boolean(
+    tokenClaims?.admin === true ||
+      tokenClaims?.superAdmin === true ||
+      ['admin', 'super_admin', 'super-admin'].includes(tokenClaims?.role)
+  );
   const hasSuperAdminClaim = Boolean(
     tokenClaims?.superAdmin === true ||
       ['super_admin', 'super-admin'].includes(tokenClaims?.role)
